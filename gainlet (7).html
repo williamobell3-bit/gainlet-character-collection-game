@@ -1,0 +1,2957 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gainlet - Character Collection Game</title>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Bungee&family=Quicksand:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Quicksand', sans-serif; background: #0a0e27; color: #e8eaf6; min-height: 100vh; }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    @keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes bounce { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
+    @keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
+    @keyframes glowPulse { 0%, 100% { filter: drop-shadow(0 0 8px currentColor); } 50% { filter: drop-shadow(0 0 20px currentColor); } }
+    @keyframes cardReveal { 0% { transform: scale(0.5) rotateY(180deg); opacity: 0; } 100% { transform: scale(1) rotateY(0); opacity: 1; } }
+    @keyframes shake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-5px); } 75% { transform: translateX(5px); } }
+    ::-webkit-scrollbar { width: 8px; }
+    ::-webkit-scrollbar-track { background: #1a1f3a; }
+    ::-webkit-scrollbar-thumb { background: #7b2ff7; border-radius: 4px; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel">
+    const { useState, useEffect, useRef, useCallback } = React;
+
+    // ==================== CONSTANTS ====================
+    const RARITIES = {
+      Common: { color: '#9e9e9e', glow: 'none', powerRange: [1, 50], sellValue: 5 },
+      Rare: { color: '#4caf50', glow: '0 0 10px #4caf50', powerRange: [51, 150], sellValue: 15 },
+      Extreme: { color: '#2196f3', glow: '0 0 12px #2196f3', powerRange: [151, 280], sellValue: 40 },
+      Legendary: { color: '#9c27b0', glow: '0 0 15px #9c27b0', powerRange: [281, 420], sellValue: 100 },
+      Mythic: { color: '#ff9800', glow: '0 0 18px #ff9800', powerRange: [421, 570], sellValue: 250 },
+      Unbelievable: { color: '#f44336', glow: '0 0 20px #f44336', powerRange: [571, 720], sellValue: 500 },
+      Divine: { color: '#e91e63', glow: '0 0 22px #e91e63', powerRange: [721, 850], sellValue: 800 },
+      Celestial: { color: '#00bcd4', glow: '0 0 25px #00bcd4', powerRange: [851, 920], sellValue: 1200 },
+      Transcendent: { color: '#ffd700', glow: '0 0 28px #ffd700', powerRange: [921, 970], sellValue: 1800 },
+      Insane: { color: '#ff2d78', glow: '0 0 35px #ff2d78, 0 0 60px #ff2d78', powerRange: [971, 1000], sellValue: 3000 },
+      Secret: { color: '#7b2ff7', glow: '0 0 30px #7b2ff7, 0 0 50px #00d4ff', powerRange: [500, 1000], sellValue: 2000 }
+    };
+    const RARITY_ORDER = ['Common','Rare','Extreme','Legendary','Mythic','Unbelievable','Divine','Celestial','Transcendent','Insane','Secret'];
+
+    // Pack Characters (10 packs × 10 characters each)
+    const PACK_CHARS = {
+      Ice: ['Frostbite','Glacier','Snowdrift','Icicle','Permafrost','Blizzard','Coldsnap','Frozen Heart','Ice Queen','Absolute Zero'],
+      Water: ['Tsunami','Ripple','Aqua','Torrent','Cascade','Drip','Tidal','Splash','Hydro','Poseidon'],
+      Fire: ['Ember','Inferno','Blaze','Cinder','Phoenix','Pyro','Flame','Ash','Magma','Hellfire'],
+      Earth: ['Boulder','Terra','Quake','Granite','Mud','Dust','Stone','Fossil','Mountain','Gaia'],
+      Sky: ['Zephyr','Cloud','Storm','Thunder','Lightning','Gale','Breeze','Tornado','Cyclone','Tempest'],
+      Digital: ['Pixel','Byte','Glitch','Data','Code','Binary','Virus','Firewall','Matrix','Cyber'],
+      Fantasy: ['Dragon','Unicorn','Griffin','Fairy','Wizard','Elf','Dwarf','Ogre','Mermaid','Centaur'],
+      Tropic: ['Palm','Coconut','Mango','Toucan','Parrot','Jungle','Vine','Orchid','Lagoon','Paradise'],
+      Ocean: ['Coral','Shark','Whale','Dolphin','Jellyfish','Octopus','Seahorse','Starfish','Crab','Pearl'],
+      Animal: ['Lion','Wolf','Bear','Eagle','Fox','Tiger','Panther','Hawk','Serpent','Rhino']
+    };
+    const PACK_RARITY_PATTERN = ['Common','Common','Common','Rare','Rare','Extreme','Legendary','Mythic','Unbelievable','Divine'];
+
+    // Pack icons - each pack has a unique icon, and each character in the pack has a unique icon
+    const PACK_ICONS = {
+      Ice: { pack: '❄️', chars: ['🧊', '🏔️', '☃️', '🌨️', '🥶', '🌬️', '💎', '🪻', '👸', '⬜'] },
+      Water: { pack: '💧', chars: ['🌊', '💦', '🫧', '🌀', '🏞️', '💠', '🌴', '💥', '🔵', '🔱'] },
+      Fire: { pack: '🔥', chars: ['✨', '🌋', '💫', '🕯️', '🦩', '🧨', '🔆', '💨', '🌡️', '😈'] },
+      Earth: { pack: '🪨', chars: ['⛰️', '🌍', '🌋', '🗿', '🟤', '🌫️', '💎', '🦴', '⛰️', '🌺'] },
+      Sky: { pack: '☁️', chars: ['🌬️', '⛅', '⛈️', '⚡', '🌩️', '🍃', '🌸', '🌪️', '🌀', '⚡'] },
+      Digital: { pack: '💻', chars: ['👾', '🔢', '📟', '💾', '🖥️', '🔣', '🦠', '🛡️', '🟢', '🤖'] },
+      Fantasy: { pack: '🏰', chars: ['🐉', '🦄', '🦅', '🧚', '🧙', '🧝', '⛏️', '👹', '🧜', '🐴'] },
+      Tropic: { pack: '🌴', chars: ['🌴', '🥥', '🥭', '🦜', '🦜', '🌿', '🪴', '🌺', '🏝️', '🌅'] },
+      Ocean: { pack: '🐚', chars: ['🪸', '🦈', '🐋', '🐬', '🪼', '🐙', '🦑', '⭐', '🦀', '🦪'] },
+      Animal: { pack: '🦁', chars: ['🦁', '🐺', '🐻', '🦅', '🦊', '🐯', '🐆', '🦅', '🐍', '🦏'] }
+    };
+
+    // Spondlite icons - each area has a unique icon, and each character has a unique icon
+    const SPONDLITE_ICONS = {
+      Underground: { area: '⛏️', chars: ['🐀', '🦇', '🐁', '💎', '⚒️', '👁️', '👤', '🔮', '👂', '🌳', '🍄', '🏊', '🖤', '💠', '🪨', '🌋'] },
+      Knowledge: { area: '📚', chars: ['🐛', '📜', '🖋️', '✒️', '📄', '👻', '🦉', '🎓', '👨‍🏫', '📐', '❓', '🔬', '🗄️', '📑', '📖', '📝', '🔖'] },
+      Strong: { area: '💪', chars: ['🗿', '🏛️', '🚂', '🦣', '🐋', '⚔️', '🏋️', '💪', '🦸', '🔨', '👊', '🛡️', '🏰', '⚓', '🧱', '🛡️', '🏯'] },
+      Natural: { area: '🌿', chars: ['🌳', '🏞️', '⛰️', '💃', '☀️', '🌙', '⭐', '🌍', '🌤️', '🌧️', '❄️', '🍃', '🌸', '🌹', '🌱', '🌾'] },
+      Special: { area: '✨', chars: ['✨', '💫', '🌟', '☀️', '💡', '⚡', '📸', '🎆', '💥', '🌈', '💎', '🔦', '🕯️', '💛', '🟣', '🌈', '🔮'] },
+      Unknown: { area: '❓', chars: ['❔', '🎭', '🧩', '🧩', '🔐', '🤫', '🙈', '🌑', '🔒', '🪄', '🔮', '👁️‍🗨️', '🌀', '👻', '💀', '👽', '🌫️'] }
+    };
+
+    // Secret Characters (50)
+    const SECRET_CHARS = ['Voidwalker','Eternity','Nexus Prime','Cosmic Drift','Star Eater','Galaxy Mind','Dimension Shifter','Time Weaver','Reality Bender','Quantum Ghost','Nebula Heart','Dark Matter','Singularity','Event Horizon','Astral King','Celestial Fury','Void Emperor','Omega Prime','Alpha Genesis','Infinity Loop','Paradox','Entropy','Chaos Theory','Order Prime','Balance','Harmony','Discord','Serenity','Tempest Soul','Frozen Time','Burning Fate','Electric Dream','Shadow Light','Bright Dark','Silent Storm','Loud Whisper','Gentle Giant','Fierce Calm','Wild Peace','Tame Fury','Ancient Future','New Old','First Last','Beginning End','Alpha Omega','Zero One','All Nothing','Everything None','Eternal Moment','Infinite Point'];
+
+    // Spondlite Characters (100 across 6 areas)
+    const SPONDLITE_CHARS = {
+      Underground: ['Mole King','Cave Dweller','Tunnel Rat','Gem Finder','Crystal Miner','Deep One','Shadow Lurker','Blind Seer','Echo Hunter','Root Walker','Mushroom Sage','Lava Swimmer','Obsidian Knight','Diamond Back','Bedrock','Core Dweller'],
+      Knowledge: ['Book Worm','Scroll Master','Ink Spirit','Quill','Parchment','Library Ghost','Wise Owl','Scholar','Professor','Theorem','Hypothesis','Research','Archive','Index','Glossary','Footnote','Citation'],
+      Strong: ['Titan','Colossus','Juggernaut','Behemoth','Leviathan','Goliath','Atlas','Hercules','Samson','Thor','Brute','Tank','Fortress','Bastion','Bulwark','Rampart','Stronghold'],
+      Natural: ['Oak Heart','River Spirit','Mountain Soul','Wind Dancer','Sun Child','Moon Walker','Star Gazer','Earth Mother','Sky Father','Rain Maker','Snow Bringer','Leaf Whisperer','Flower Crown','Thorn King','Seed Keeper','Harvest'],
+      Special: ['Glitter','Sparkle','Shimmer','Shine','Glow','Gleam','Flash','Flare','Dazzle','Radiant','Brilliant','Luminous','Incandescent','Phosphor','Neon','Aurora','Prism'],
+      Unknown: ['???','Mystery','Enigma','Puzzle','Riddle','Secret','Hidden','Obscure','Cryptic','Arcane','Mystic','Occult','Esoteric','Ethereal','Phantom','Specter','Wraith']
+    };
+
+    const SPONDLITE_RARITIES = {
+      Underground: ['Rare','Rare','Common','Common','Extreme','Legendary','Mythic','Unbelievable','Divine','Celestial','Common','Rare','Extreme','Transcendent','Insane','Legendary'],
+      Knowledge: ['Common','Common','Rare','Rare','Common','Extreme','Legendary','Mythic','Unbelievable','Divine','Celestial','Transcendent','Insane','Rare','Extreme','Legendary','Mythic'],
+      Strong: ['Extreme','Legendary','Mythic','Unbelievable','Divine','Celestial','Transcendent','Insane','Legendary','Mythic','Rare','Rare','Extreme','Legendary','Mythic','Unbelievable','Divine'],
+      Natural: ['Common','Common','Rare','Rare','Extreme','Legendary','Mythic','Unbelievable','Divine','Celestial','Transcendent','Common','Rare','Extreme','Legendary','Insane'],
+      Special: ['Rare','Rare','Extreme','Extreme','Legendary','Legendary','Mythic','Mythic','Unbelievable','Divine','Celestial','Transcendent','Insane','Legendary','Mythic','Unbelievable','Divine'],
+      Unknown: ['Mythic','Unbelievable','Divine','Celestial','Transcendent','Insane','Legendary','Mythic','Unbelievable','Divine','Celestial','Transcendent','Insane','Legendary','Mythic','Unbelievable','Divine']
+    };
+
+    // Build complete character database
+    const ALL_CHARACTERS = {};
+    let charId = 1;
+    Object.entries(PACK_CHARS).forEach(([pack, chars]) => {
+      chars.forEach((name, idx) => {
+        ALL_CHARACTERS[`pack_${pack}_${idx}`] = { id: `pack_${pack}_${idx}`, name, source: 'pack', pack, rarity: PACK_RARITY_PATTERN[idx] };
+      });
+    });
+    SECRET_CHARS.forEach((name, idx) => {
+      const rarities = ['Legendary','Mythic','Unbelievable','Divine','Celestial','Transcendent','Insane'];
+      ALL_CHARACTERS[`secret_${idx}`] = { id: `secret_${idx}`, name, source: 'secret', rarity: rarities[idx % rarities.length] };
+    });
+    Object.entries(SPONDLITE_CHARS).forEach(([area, chars]) => {
+      chars.forEach((name, idx) => {
+        ALL_CHARACTERS[`spond_${area}_${idx}`] = { id: `spond_${area}_${idx}`, name, source: 'spondlite', area, rarity: SPONDLITE_RARITIES[area][idx] || 'Rare' };
+      });
+    });
+
+    // Seeded random for consistent power values
+    const seededRandom = (seed) => {
+      const x = Math.sin(seed * 9999) * 10000;
+      return x - Math.floor(x);
+    };
+    const getCharPower = (charId) => {
+      const char = ALL_CHARACTERS[charId];
+      if (!char) return 50;
+      const [min, max] = RARITIES[char.rarity].powerRange;
+      const seed = charId.split('').reduce((a, c) => a + c.charCodeAt(0), 0);
+      return Math.floor(min + seededRandom(seed) * (max - min));
+    };
+
+    // Tower boosts
+    const TOWER_LEVELS = [
+      { name: 'Base', boost: 1.5, slots: 5 },
+      { name: 'Back-up', boost: 1.3, slots: 5 },
+      { name: 'Medium', boost: 1.15, slots: 5 },
+      { name: 'Top', boost: 1.05, slots: 5 }
+    ];
+
+    // Quiz questions
+    const QUIZ_QUESTIONS = [
+      { q: "What is the capital of France?", a: ["Paris", "London", "Berlin", "Madrid"], correct: 0 },
+      { q: "What is 12 × 12?", a: ["124", "144", "132", "156"], correct: 1 },
+      { q: "Which planet is closest to the Sun?", a: ["Venus", "Earth", "Mercury", "Mars"], correct: 2 },
+      { q: "What color do you get mixing blue and yellow?", a: ["Purple", "Orange", "Green", "Brown"], correct: 2 },
+      { q: "How many continents are there?", a: ["5", "6", "7", "8"], correct: 2 },
+      { q: "What is the largest ocean?", a: ["Atlantic", "Indian", "Arctic", "Pacific"], correct: 3 },
+      { q: "Who painted the Mona Lisa?", a: ["Da Vinci", "Picasso", "Van Gogh", "Monet"], correct: 0 },
+      { q: "What is the square root of 64?", a: ["6", "7", "8", "9"], correct: 2 },
+      { q: "Which animal is known as King of the Jungle?", a: ["Tiger", "Lion", "Elephant", "Gorilla"], correct: 1 },
+      { q: "What is H2O commonly known as?", a: ["Salt", "Sugar", "Water", "Oxygen"], correct: 2 },
+      { q: "How many days in a leap year?", a: ["364", "365", "366", "367"], correct: 2 },
+      { q: "What is the largest mammal?", a: ["Elephant", "Blue Whale", "Giraffe", "Hippo"], correct: 1 },
+      { q: "Which country has the most people?", a: ["USA", "India", "China", "Russia"], correct: 1 },
+      { q: "What gas do plants absorb?", a: ["Oxygen", "Nitrogen", "Carbon Dioxide", "Hydrogen"], correct: 2 },
+      { q: "How many sides does a hexagon have?", a: ["5", "6", "7", "8"], correct: 1 },
+      { q: "What is the freezing point of water in Celsius?", a: ["-10", "0", "10", "32"], correct: 1 },
+      { q: "Which instrument has 88 keys?", a: ["Guitar", "Violin", "Piano", "Drums"], correct: 2 },
+      { q: "What is the smallest prime number?", a: ["0", "1", "2", "3"], correct: 2 },
+      { q: "How many bones in the adult human body?", a: ["186", "206", "226", "246"], correct: 1 },
+      { q: "What planet is known as the Red Planet?", a: ["Venus", "Mars", "Jupiter", "Saturn"], correct: 1 }
+    ];
+
+    // Bot friends
+    const BOT_FRIENDS = ['GainBot', 'ProPlayer', 'CharCollector', 'TowerMaster', 'PackLucky'];
+
+    // Storage helpers
+    const storage = {
+      async get(key, shared = false) {
+        try {
+          if (typeof window !== 'undefined' && window.storage) {
+            return await window.storage.get(key, shared);
+          }
+          const data = localStorage.getItem((shared ? 'shared_' : '') + key);
+          return data ? { value: data } : null;
+        } catch { return null; }
+      },
+      async set(key, value, shared = false) {
+        try {
+          if (typeof window !== 'undefined' && window.storage) {
+            return await window.storage.set(key, value, shared);
+          }
+          localStorage.setItem((shared ? 'shared_' : '') + key, value);
+          return { value };
+        } catch { return null; }
+      },
+      async list(prefix, shared = false) {
+        try {
+          if (typeof window !== 'undefined' && window.storage) {
+            return await window.storage.list(prefix, shared);
+          }
+          const keys = [];
+          for (let i = 0; i < localStorage.length; i++) {
+            const k = localStorage.key(i);
+            if (k.startsWith((shared ? 'shared_' : '') + prefix)) keys.push(k.replace(shared ? 'shared_' : '', ''));
+          }
+          return { keys };
+        } catch { return { keys: [] }; }
+      },
+      async delete(key, shared = false) {
+        try {
+          if (typeof window !== 'undefined' && window.storage) {
+            return await window.storage.delete(key, shared);
+          }
+          localStorage.removeItem((shared ? 'shared_' : '') + key);
+          return { deleted: true };
+        } catch { return null; }
+      }
+    };
+
+    const loadProfile = async (username) => {
+      try {
+        const result = await storage.get(`profile_${username}`);
+        return result ? JSON.parse(result.value) : null;
+      } catch { return null; }
+    };
+
+    const saveProfile = async (profile) => {
+      try {
+        await storage.set(`profile_${profile.username}`, JSON.stringify(profile));
+        await storage.set(`public_${profile.username}`, JSON.stringify({
+          username: profile.username,
+          characters: profile.characters,
+          tower: profile.tower
+        }), true);
+      } catch {}
+    };
+
+    // Generate code for multiplayer
+    const generateCode = () => {
+      const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+      let code = '';
+      for (let i = 0; i < 6; i++) code += chars[Math.floor(Math.random() * chars.length)];
+      return code;
+    };
+
+    // ==================== STYLES ====================
+    const S = {
+      heading: { fontFamily: "'Bungee', cursive", color: '#00d4ff', textShadow: '0 0 20px rgba(0,212,255,0.5)', margin: 0 },
+      card: { background: 'linear-gradient(135deg, rgba(26,31,58,0.95) 0%, rgba(15,20,40,0.98) 100%)', borderRadius: 16, padding: 16, border: '1px solid rgba(255,255,255,0.06)', boxShadow: '0 8px 32px rgba(0,0,0,0.3)' },
+      input: { background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, padding: '12px 16px', color: '#e8eaf6', fontSize: 16, width: '100%', outline: 'none' }
+    };
+
+    // ==================== COMPONENTS ====================
+    function Btn({ children, onClick, variant = 'primary', disabled, style = {} }) {
+      const variants = {
+        primary: { background: 'linear-gradient(135deg, #00d4ff 0%, #7b2ff7 100%)', color: '#fff' },
+        secondary: { background: 'rgba(255,255,255,0.1)', color: '#e8eaf6', border: '1px solid rgba(255,255,255,0.2)' },
+        gold: { background: 'linear-gradient(135deg, #ffd700 0%, #ff8c00 100%)', color: '#000' },
+        danger: { background: 'linear-gradient(135deg, #ff2d78 0%, #ff6b6b 100%)', color: '#fff' }
+      };
+      return (
+        <button onClick={onClick} disabled={disabled} style={{
+          ...variants[variant], padding: '12px 24px', borderRadius: 12, border: 'none', fontWeight: 700,
+          cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.5 : 1, fontSize: 14,
+          transition: 'all 0.2s', fontFamily: "'Quicksand', sans-serif", ...style
+        }}>{children}</button>
+      );
+    }
+
+    function Modal({ children, onClose }) {
+      return (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 20 }} onClick={onClose}>
+          <div style={{ ...S.card, maxWidth: 500, width: '100%', maxHeight: '80vh', overflow: 'auto', animation: 'slideUp 0.3s' }} onClick={e => e.stopPropagation()}>
+            {children}
+          </div>
+        </div>
+      );
+    }
+
+    function Coins({ amount }) {
+      return <span style={{ color: '#ffd700', fontWeight: 700 }}>💰 ${amount.toLocaleString()}</span>;
+    }
+
+    function RarityTag({ rarity }) {
+      const r = RARITIES[rarity];
+      return (
+        <span style={{ background: r.color + '33', color: r.color, padding: '2px 8px', borderRadius: 6, fontSize: 11, fontWeight: 700, boxShadow: r.glow }}>
+          {rarity}
+        </span>
+      );
+    }
+
+    // Get character icon based on source and index
+    const getCharIcon = (charId) => {
+      const char = ALL_CHARACTERS[charId];
+      if (!char) return '❓';
+      
+      if (char.source === 'pack') {
+        const packIcons = PACK_ICONS[char.pack];
+        if (packIcons) {
+          const idx = parseInt(charId.split('_')[2]);
+          return packIcons.chars[idx] || '📦';
+        }
+        return '📦';
+      }
+      
+      if (char.source === 'spondlite') {
+        const areaIcons = SPONDLITE_ICONS[char.area];
+        if (areaIcons) {
+          const idx = parseInt(charId.split('_')[2]);
+          return areaIcons.chars[idx] || '💎';
+        }
+        return '💎';
+      }
+      
+      if (char.source === 'secret') return '🌟';
+      if (char.source === 'unique') return '⭐';
+      
+      return '❓';
+    };
+
+    function CharCard({ charId, onClick, selected, small }) {
+      const char = ALL_CHARACTERS[charId];
+      if (!char) return null;
+      const r = RARITIES[char.rarity];
+      const power = getCharPower(charId);
+      const icon = getCharIcon(charId);
+      return (
+        <div onClick={onClick} style={{
+          ...S.card, cursor: onClick ? 'pointer' : 'default', padding: small ? 8 : 12, textAlign: 'center',
+          border: selected ? '2px solid #00d4ff' : '1px solid rgba(255,255,255,0.06)',
+          background: `linear-gradient(135deg, ${r.color}22 0%, rgba(15,20,40,0.98) 100%)`,
+          boxShadow: r.glow, transition: 'transform 0.2s', minWidth: small ? 80 : 100
+        }}>
+          <div style={{ fontSize: small ? 28 : 36, marginBottom: 4 }}>{icon}</div>
+          <div style={{ fontWeight: 700, fontSize: small ? 11 : 13, color: r.color, marginBottom: 4 }}>{char.name}</div>
+          <RarityTag rarity={char.rarity} />
+          <div style={{ marginTop: 4, fontSize: small ? 10 : 12, color: '#7986a8' }}>⚔️ {power}</div>
+        </div>
+      );
+    }
+
+    function TabBar({ tabs, active, onChange }) {
+      return (
+        <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
+          {tabs.map(t => (
+            <button key={t.id} onClick={() => onChange(t.id)} style={{
+              padding: '8px 16px', borderRadius: 8, border: 'none', cursor: 'pointer',
+              background: active === t.id ? 'linear-gradient(135deg, #00d4ff 0%, #7b2ff7 100%)' : 'rgba(255,255,255,0.1)',
+              color: active === t.id ? '#fff' : '#7986a8', fontWeight: 600, fontSize: 13, fontFamily: "'Quicksand', sans-serif"
+            }}>{t.label}</button>
+          ))}
+        </div>
+      );
+    }
+
+    function NavBar({ screen, setScreen, profile }) {
+      const navItems = [
+        { id: 'hub', icon: '🏠', label: 'Hub' },
+        { id: 'collection', icon: '📚', label: 'Collection' },
+        { id: 'open', icon: '🎁', label: 'Open' },
+        { id: 'tower', icon: '🗼', label: 'Tower' },
+        { id: 'tournament', icon: '🏆', label: 'Games' },
+        { id: 'shop', icon: '🛒', label: 'Shop' },
+        { id: 'friends', icon: '👥', label: 'Friends' }
+      ];
+      return (
+        <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, background: 'linear-gradient(180deg, transparent 0%, rgba(10,14,39,0.95) 20%)', padding: '12px 8px 8px', display: 'flex', justifyContent: 'space-around', zIndex: 100 }}>
+          {navItems.map(item => (
+            <button key={item.id} onClick={() => setScreen(item.id)} style={{
+              background: screen === item.id ? 'linear-gradient(135deg, #00d4ff33 0%, #7b2ff733 100%)' : 'transparent',
+              border: 'none', padding: '8px 12px', borderRadius: 12, cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2
+            }}>
+              <span style={{ fontSize: 20 }}>{item.icon}</span>
+              <span style={{ fontSize: 10, color: screen === item.id ? '#00d4ff' : '#7986a8', fontWeight: 600 }}>{item.label}</span>
+            </button>
+          ))}
+        </div>
+      );
+    }
+
+    // ==================== SCREENS ====================
+    function LoginScreen({ onLogin }) {
+      const [username, setUsername] = useState('');
+      const [password, setPassword] = useState('');
+      const [isRegister, setIsRegister] = useState(false);
+      const [error, setError] = useState('');
+      const [loading, setLoading] = useState(false);
+
+      const handleSubmit = async () => {
+        if (!username.trim() || !password.trim()) { setError('Please fill in all fields'); return; }
+        setLoading(true); setError('');
+        try {
+          const accountsRes = await storage.get('accounts', true);
+          const accounts = accountsRes ? JSON.parse(accountsRes.value) : {};
+          
+          if (isRegister) {
+            if (accounts[username]) { setError('Username already exists'); setLoading(false); return; }
+            accounts[username] = { password: btoa(password), created: Date.now() };
+            await storage.set('accounts', JSON.stringify(accounts), true);
+            const newProfile = {
+              username, money: 500, characters: [], tower: [[],[],[],[]], luckMultiplier: 1, luckUsesRemaining: 0, friends: [...BOT_FRIENDS],
+              lentChars: [], borrowedChars: []
+            };
+            await saveProfile(newProfile);
+            onLogin(newProfile);
+          } else {
+            if (!accounts[username] || accounts[username].password !== btoa(password)) {
+              setError('Invalid username or password'); setLoading(false); return;
+            }
+            const profile = await loadProfile(username);
+            if (profile) { onLogin(profile); }
+            else { setError('Profile not found'); }
+          }
+        } catch (e) { setError('Error: ' + e.message); }
+        setLoading(false);
+      };
+
+      return (
+        <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+          <div style={{ ...S.card, maxWidth: 400, width: '100%', textAlign: 'center', animation: 'fadeIn 0.5s' }}>
+            <h1 style={{ ...S.heading, fontSize: 42, marginBottom: 8 }}>GAINLET</h1>
+            <p style={{ color: '#7986a8', marginBottom: 24 }}>Collect characters. Build your tower. Become legendary.</p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <input type="text" placeholder="Username" value={username} onChange={e => setUsername(e.target.value)} style={S.input} />
+              <input type="password" placeholder="Password" value={password} onChange={e => setPassword(e.target.value)} style={S.input} onKeyDown={e => e.key === 'Enter' && handleSubmit()} />
+              {error && <p style={{ color: '#ff5252', fontSize: 13 }}>{error}</p>}
+              <Btn onClick={handleSubmit} disabled={loading}>{loading ? 'Loading...' : isRegister ? 'Create Account' : 'Login'}</Btn>
+              <button onClick={() => { setIsRegister(!isRegister); setError(''); }} style={{ background: 'none', border: 'none', color: '#00d4ff', cursor: 'pointer', fontSize: 13 }}>
+                {isRegister ? 'Already have an account? Login' : "Don't have an account? Register"}
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    function HubScreen({ profile, setScreen }) {
+      const totalScore = getTotalCharScore(profile.characters);
+      
+      return (
+        <div style={{ padding: 20, animation: 'fadeIn 0.3s' }}>
+          <div style={{ textAlign: 'center', marginBottom: 24 }}>
+            <h1 style={{ ...S.heading, fontSize: 32 }}>Welcome, {profile.username}!</h1>
+            <div style={{ marginTop: 8, display: 'flex', justifyContent: 'center', gap: 20, flexWrap: 'wrap' }}>
+              <Coins amount={profile.money} />
+              <span style={{ color: '#ffd700', fontWeight: 700 }}>⭐ Score: {totalScore.toLocaleString()}</span>
+            </div>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 12 }}>
+            {[
+              { id: 'collection', icon: '📚', label: 'Collection', desc: `${profile.characters.length} chars` },
+              { id: 'open', icon: '🎁', label: 'Open Packs', desc: 'Get new chars' },
+              { id: 'tower', icon: '🗼', label: 'Tower', desc: 'Power boosts' },
+              { id: 'tournament', icon: '🏆', label: 'Games', desc: 'Win rewards' },
+              { id: 'shop', icon: '🛒', label: 'Shop', desc: 'Special items' },
+              { id: 'friends', icon: '👥', label: 'Friends', desc: 'Trade & play' }
+            ].map(item => (
+              <div key={item.id} onClick={() => setScreen(item.id)} style={{ ...S.card, cursor: 'pointer', textAlign: 'center', transition: 'transform 0.2s' }}
+                onMouseOver={e => e.currentTarget.style.transform = 'translateY(-4px)'}
+                onMouseOut={e => e.currentTarget.style.transform = 'translateY(0)'}>
+                <div style={{ fontSize: 36 }}>{item.icon}</div>
+                <div style={{ fontWeight: 700, marginTop: 8 }}>{item.label}</div>
+                <div style={{ color: '#7986a8', fontSize: 12 }}>{item.desc}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    function CollectionScreen({ profile, updateProfile }) {
+      const [filter, setFilter] = useState('all');
+      const [selected, setSelected] = useState(null); // Now stores { charId, arrayIndex }
+
+      // Create array with indices for proper tracking
+      const charsWithIndex = profile.characters.map((cid, idx) => ({ charId: cid, arrayIndex: idx }));
+      
+      const filtered = charsWithIndex.filter(item => {
+        if (filter === 'all') return true;
+        const char = ALL_CHARACTERS[item.charId];
+        if (filter === 'pack') return char?.source === 'pack';
+        if (filter === 'secret') return char?.source === 'secret';
+        if (filter === 'spondlite') return char?.source === 'spondlite';
+        return char?.rarity === filter;
+      });
+
+      const sellChar = () => {
+        if (!selected) return;
+        const char = ALL_CHARACTERS[selected.charId];
+        const value = RARITIES[char.rarity].sellValue;
+        const newChars = [...profile.characters];
+        // Remove the specific character at the exact array index
+        newChars.splice(selected.arrayIndex, 1);
+        // Also remove from tower if present
+        const newTower = profile.tower.map(level => {
+          const idx = level.indexOf(selected.charId);
+          if (idx !== -1) {
+            const newLevel = [...level];
+            newLevel.splice(idx, 1);
+            return newLevel;
+          }
+          return level;
+        });
+        updateProfile({ ...profile, characters: newChars, tower: newTower, money: profile.money + value });
+        setSelected(null);
+      };
+
+      return (
+        <div style={{ padding: 20, paddingBottom: 100, animation: 'fadeIn 0.3s' }}>
+          <h2 style={{ ...S.heading, fontSize: 24, marginBottom: 16 }}>📚 Collection ({profile.characters.length})</h2>
+          <TabBar
+            tabs={[{ id: 'all', label: 'All' }, { id: 'pack', label: 'Packs' }, { id: 'secret', label: 'Secrets' }, { id: 'spondlite', label: 'Spondlite' }, ...RARITY_ORDER.slice(0, 5).map(r => ({ id: r, label: r }))]}
+            active={filter} onChange={setFilter}
+          />
+          {filtered.length === 0 ? (
+            <div style={{ ...S.card, textAlign: 'center', padding: 40 }}>
+              <div style={{ fontSize: 48, marginBottom: 8 }}>📭</div>
+              <p style={{ color: '#7986a8' }}>No characters found</p>
+            </div>
+          ) : (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(100px, 1fr))', gap: 8 }}>
+              {filtered.map(item => (
+                <CharCard 
+                  key={`${item.charId}_${item.arrayIndex}`} 
+                  charId={item.charId} 
+                  onClick={() => setSelected(item)} 
+                  small 
+                />
+              ))}
+            </div>
+          )}
+          {selected && (
+            <Modal onClose={() => setSelected(null)}>
+              <CharCard charId={selected.charId} />
+              <div style={{ marginTop: 16, display: 'flex', gap: 8 }}>
+                <Btn variant="danger" onClick={sellChar}>Sell for ${RARITIES[ALL_CHARACTERS[selected.charId]?.rarity]?.sellValue}</Btn>
+                <Btn variant="secondary" onClick={() => setSelected(null)}>Close</Btn>
+              </div>
+            </Modal>
+          )}
+        </div>
+      );
+    }
+
+    // Calculate character score based on rarity
+    const getCharScore = (charId) => {
+      const char = ALL_CHARACTERS[charId];
+      if (!char) return 0;
+      const scores = {
+        Common: 10,
+        Rare: 35,
+        Extreme: 80,
+        Legendary: 150,
+        Mythic: 300,
+        Unbelievable: 500,
+        Divine: 800,
+        Celestial: 1200,
+        Transcendent: 2000,
+        Insane: 3500,
+        Secret: 1500
+      };
+      return scores[char.rarity] || 10;
+    };
+
+    const getTotalCharScore = (characters) => {
+      return characters.reduce((total, charId) => total + getCharScore(charId), 0);
+    };
+
+    function OpenScreen({ profile, updateProfile }) {
+      const [tab, setTab] = useState('packs');
+      const [opening, setOpening] = useState(null);
+      const [result, setResult] = useState(null);
+      const [revealPhase, setRevealPhase] = useState(0);
+      const [particles, setParticles] = useState([]);
+      const [confetti, setConfetti] = useState([]);
+      const [shake, setShake] = useState(false);
+      const [revealAnim, setRevealAnim] = useState('');
+      const animFrameRef = useRef(null);
+
+      const getRarityLevel = (rarity) => {
+        const levels = { Common: 1, Rare: 2, Extreme: 3, Legendary: 4, Mythic: 5, Unbelievable: 6, Divine: 7, Celestial: 8, Transcendent: 9, Insane: 10, Secret: 8 };
+        return levels[rarity] || 1;
+      };
+
+      // Smooth smoke animation
+      useEffect(() => {
+        if (particles.length === 0) return;
+        
+        const animate = () => {
+          setParticles(prev => {
+            const updated = prev.map(p => ({
+              ...p,
+              y: p.y - 0.3 - Math.random() * 0.2,
+              x: p.x + (Math.random() - 0.5) * 0.5,
+              opacity: Math.max(0, p.opacity - 0.008),
+              size: p.size * 1.01
+            })).filter(p => p.opacity > 0);
+            return updated;
+          });
+          animFrameRef.current = requestAnimationFrame(animate);
+        };
+        
+        animFrameRef.current = requestAnimationFrame(animate);
+        return () => cancelAnimationFrame(animFrameRef.current);
+      }, [particles.length > 0]);
+
+      const startReveal = (charId) => {
+        const char = ALL_CHARACTERS[charId];
+        const rarityLevel = getRarityLevel(char?.rarity);
+        
+        // Pick reveal animation based on rarity
+        const animations = ['spin', 'rain', 'bounce', 'grow', 'zoom'];
+        let anim;
+        if (rarityLevel <= 2) {
+          anim = animations[Math.floor(Math.random() * 2)]; // spin or rain for common
+        } else if (rarityLevel <= 4) {
+          anim = animations[Math.floor(Math.random() * 3) + 1]; // rain, bounce, grow
+        } else if (rarityLevel <= 6) {
+          anim = animations[Math.floor(Math.random() * 2) + 2]; // bounce, grow
+        } else {
+          anim = animations[Math.floor(Math.random() * 2) + 3]; // grow or zoom for epic
+        }
+        setRevealAnim(anim);
+        
+        // Start smoke phase
+        setRevealPhase(1);
+        
+        // Create smoke particles
+        const smokeCount = 30 + rarityLevel * 8;
+        const newParticles = [];
+        for (let i = 0; i < smokeCount; i++) {
+          const angle = Math.random() * Math.PI * 2;
+          const dist = Math.random() * 30;
+          newParticles.push({
+            id: i,
+            x: 50 + Math.cos(angle) * dist,
+            y: 55 + Math.sin(angle) * dist,
+            size: 30 + Math.random() * 50,
+            opacity: 0.7 + Math.random() * 0.3,
+            color: rarityLevel >= 6 ? RARITIES[char.rarity].color : rarityLevel >= 4 ? '#666' : '#888'
+          });
+        }
+        setParticles(newParticles);
+        
+        // Shake for rare pulls
+        if (rarityLevel >= 5) {
+          setShake(true);
+          setTimeout(() => setShake(false), 600);
+        }
+        
+        // Phase 2: Lights
+        setTimeout(() => {
+          setRevealPhase(2);
+        }, rarityLevel >= 5 ? 1200 : 600);
+        
+        // Phase 3: Reveal character
+        setTimeout(() => {
+          setRevealPhase(3);
+          
+          // Add confetti for good pulls
+          if (rarityLevel >= 3) {
+            const confettiCount = rarityLevel * 12;
+            const newConfetti = [];
+            const colors = rarityLevel >= 7 
+              ? [RARITIES[char.rarity].color, '#ffd700', '#fff', '#ff2d78'] 
+              : ['#ffd700', '#00d4ff', '#ff2d78', '#4caf50', '#9c27b0'];
+            
+            for (let i = 0; i < confettiCount; i++) {
+              newConfetti.push({
+                id: i,
+                x: Math.random() * 100,
+                y: -10 - Math.random() * 30,
+                vx: (Math.random() - 0.5) * 4,
+                vy: 2 + Math.random() * 4,
+                rotation: Math.random() * 360,
+                rotationSpeed: (Math.random() - 0.5) * 25,
+                color: colors[Math.floor(Math.random() * colors.length)],
+                size: 6 + Math.random() * 10
+              });
+            }
+            setConfetti(newConfetti);
+            setRevealPhase(4);
+          }
+        }, rarityLevel >= 5 ? 2000 : 1200);
+        
+        setResult(charId);
+        setOpening(null);
+      };
+
+      // Animate confetti
+      useEffect(() => {
+        if (confetti.length === 0) return;
+        const interval = setInterval(() => {
+          setConfetti(prev => {
+            const updated = prev.map(c => ({
+              ...c,
+              x: c.x + c.vx,
+              y: c.y + c.vy,
+              rotation: c.rotation + c.rotationSpeed,
+              vy: c.vy + 0.15
+            })).filter(c => c.y < 130);
+            if (updated.length === 0) clearInterval(interval);
+            return updated;
+          });
+        }, 25);
+        return () => clearInterval(interval);
+      }, [confetti.length > 0]);
+
+      const openPack = (packName) => {
+        if (profile.money < 50) return;
+        setOpening(packName);
+        setRevealPhase(0);
+        setConfetti([]);
+        setParticles([]);
+        
+        setTimeout(() => {
+          const packChars = PACK_CHARS[packName];
+          const luckUsesRemaining = profile.luckUsesRemaining || 0;
+          const luck = luckUsesRemaining > 0 ? (profile.luckMultiplier || 1) : 1;
+          let idx = Math.floor(Math.random() * 10);
+          if (luck > 1) {
+            for (let i = 0; i < luck; i++) {
+              const newIdx = Math.floor(Math.random() * 10);
+              if (newIdx > idx) idx = newIdx;
+            }
+          }
+          const charId = `pack_${packName}_${idx}`;
+          const newChars = [...profile.characters, charId];
+          
+          // Decrement luck uses
+          let newLuckUses = Math.max(0, luckUsesRemaining - 1);
+          let newLuckMult = profile.luckMultiplier || 1;
+          if (newLuckUses === 0) {
+            newLuckMult = 1; // Reset luck when uses run out
+          }
+          
+          updateProfile({ 
+            ...profile, 
+            characters: newChars, 
+            money: profile.money - 50,
+            luckUsesRemaining: newLuckUses,
+            luckMultiplier: newLuckMult
+          });
+          startReveal(charId);
+        }, 1200);
+      };
+
+      const openSecret = () => {
+        if (profile.money < 1000) return;
+        setOpening('secret');
+        setRevealPhase(0);
+        setConfetti([]);
+        setParticles([]);
+        
+        setTimeout(() => {
+          const idx = Math.floor(Math.random() * SECRET_CHARS.length);
+          const charId = `secret_${idx}`;
+          updateProfile({ ...profile, characters: [...profile.characters, charId], money: profile.money - 1000 });
+          startReveal(charId);
+        }, 1800);
+      };
+
+      const openSpondlite = (area) => {
+        if (profile.money < 200) return;
+        setOpening(area);
+        setRevealPhase(0);
+        setConfetti([]);
+        setParticles([]);
+        
+        setTimeout(() => {
+          const chars = SPONDLITE_CHARS[area];
+          const luckUsesRemaining = profile.luckUsesRemaining || 0;
+          const luck = luckUsesRemaining > 0 ? (profile.luckMultiplier || 1) : 1;
+          
+          // Higher luck = better chance at rarer characters
+          let idx = Math.floor(Math.random() * chars.length);
+          if (luck > 1) {
+            for (let i = 0; i < Math.floor(luck / 2); i++) {
+              const newIdx = Math.floor(Math.random() * chars.length);
+              if (newIdx > idx) idx = newIdx;
+            }
+          }
+          
+          const charId = `spond_${area}_${idx}`;
+          
+          // Decrement luck uses
+          let newLuckUses = Math.max(0, luckUsesRemaining - 1);
+          let newLuckMult = profile.luckMultiplier || 1;
+          if (newLuckUses === 0) {
+            newLuckMult = 1;
+          }
+          
+          updateProfile({ 
+            ...profile, 
+            characters: [...profile.characters, charId], 
+            money: profile.money - 200,
+            luckUsesRemaining: newLuckUses,
+            luckMultiplier: newLuckMult
+          });
+          startReveal(charId);
+        }, 1200);
+      };
+
+      const closeResult = () => {
+        setResult(null);
+        setRevealPhase(0);
+        setParticles([]);
+        setConfetti([]);
+        cancelAnimationFrame(animFrameRef.current);
+      };
+
+      const resultChar = result ? ALL_CHARACTERS[result] : null;
+      const resultRarityLevel = resultChar ? getRarityLevel(resultChar.rarity) : 0;
+      const newCharScore = result ? getCharScore(result) : 0;
+
+      // Get animation style based on type
+      const getRevealStyle = () => {
+        const base = { position: 'relative', zIndex: 10 };
+        switch(revealAnim) {
+          case 'spin':
+            return { ...base, animation: 'spinIn 0.8s ease-out' };
+          case 'rain':
+            return { ...base, animation: 'rainIn 0.7s ease-out' };
+          case 'bounce':
+            return { ...base, animation: 'bounceIn 0.9s ease-out' };
+          case 'grow':
+            return { ...base, animation: 'growIn 1s ease-out' };
+          case 'zoom':
+            return { ...base, animation: 'zoomIn 1.2s ease-out' };
+          default:
+            return { ...base, animation: 'cardReveal 0.6s' };
+        }
+      };
+
+      const totalScore = getTotalCharScore(profile.characters);
+
+      return (
+        <div style={{ padding: 20, paddingBottom: 100, animation: 'fadeIn 0.3s' }}>
+          <style>{`
+            @keyframes spinIn {
+              0% { transform: rotate(720deg) scale(0); opacity: 0; }
+              100% { transform: rotate(0deg) scale(1); opacity: 1; }
+            }
+            @keyframes rainIn {
+              0% { transform: translateY(-200px) rotate(-20deg); opacity: 0; }
+              60% { transform: translateY(20px) rotate(5deg); opacity: 1; }
+              100% { transform: translateY(0) rotate(0deg); opacity: 1; }
+            }
+            @keyframes bounceIn {
+              0% { transform: scale(0) translateY(-100px); opacity: 0; }
+              40% { transform: scale(1.3) translateY(0); opacity: 1; }
+              60% { transform: scale(0.9) translateY(-30px); }
+              80% { transform: scale(1.1) translateY(0); }
+              100% { transform: scale(1) translateY(0); opacity: 1; }
+            }
+            @keyframes growIn {
+              0% { transform: scale(0.1); opacity: 0; filter: blur(10px); }
+              50% { transform: scale(1.2); opacity: 0.8; filter: blur(2px); }
+              100% { transform: scale(1); opacity: 1; filter: blur(0); }
+            }
+            @keyframes zoomIn {
+              0% { transform: scale(5) rotate(180deg); opacity: 0; filter: blur(20px); }
+              50% { transform: scale(0.8) rotate(-10deg); opacity: 1; filter: blur(0); }
+              70% { transform: scale(1.15) rotate(5deg); }
+              100% { transform: scale(1) rotate(0deg); opacity: 1; }
+            }
+          `}</style>
+          
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+            <h2 style={{ ...S.heading, fontSize: 24 }}>🎁 Open</h2>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              {(profile.luckUsesRemaining || 0) > 0 && (
+                <span style={{ color: '#4caf50', fontSize: 13, fontWeight: 700 }}>
+                  🍀 x{profile.luckMultiplier} ({profile.luckUsesRemaining})
+                </span>
+              )}
+              <Coins amount={profile.money} />
+            </div>
+          </div>
+          
+          {/* Character Score Display */}
+          <div style={{ ...S.card, marginBottom: 16, padding: '12px 16px', background: 'linear-gradient(135deg, rgba(123,47,247,0.2) 0%, rgba(0,212,255,0.1) 100%)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ color: '#7986a8', fontSize: 13 }}>⭐ Character Score</span>
+              <span style={{ fontFamily: "'Bungee', cursive", fontSize: 20, color: '#ffd700' }}>{totalScore.toLocaleString()}</span>
+            </div>
+            <div style={{ marginTop: 6, background: 'rgba(0,0,0,0.3)', borderRadius: 8, height: 8, overflow: 'hidden' }}>
+              <div style={{ 
+                height: '100%', 
+                width: `${Math.min(100, (totalScore / 10000) * 100)}%`,
+                background: 'linear-gradient(90deg, #7b2ff7 0%, #00d4ff 50%, #ffd700 100%)',
+                borderRadius: 8,
+                transition: 'width 0.5s'
+              }} />
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 4, fontSize: 10, color: '#556' }}>
+              <span>0</span>
+              <span>10,000</span>
+            </div>
+          </div>
+          
+          <TabBar tabs={[{ id: 'packs', label: '📦 Packs' }, { id: 'secrets', label: '🌟 Secrets' }, { id: 'spondlite', label: '💎 Spondlite' }]} active={tab} onChange={setTab} />
+          
+          {tab === 'packs' && (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 12 }}>
+              {Object.keys(PACK_CHARS).map(pack => (
+                <div key={pack} onClick={() => !opening && openPack(pack)} style={{
+                  ...S.card, cursor: profile.money >= 50 && !opening ? 'pointer' : 'not-allowed',
+                  opacity: profile.money >= 50 ? 1 : 0.5, textAlign: 'center', transition: 'transform 0.2s'
+                }}>
+                  <div style={{ fontSize: 36 }}>{PACK_ICONS[pack]?.pack || '📦'}</div>
+                  <div style={{ fontWeight: 700, marginTop: 8 }}>{pack}</div>
+                  <div style={{ color: '#ffd700', fontSize: 13 }}>$50</div>
+                </div>
+              ))}
+            </div>
+          )}
+          
+          {tab === 'secrets' && (
+            <div style={{ ...S.card, textAlign: 'center', cursor: profile.money >= 1000 && !opening ? 'pointer' : 'not-allowed', opacity: profile.money >= 1000 ? 1 : 0.5 }} onClick={() => !opening && openSecret()}>
+              <div style={{ fontSize: 64, animation: 'glowPulse 2s infinite', color: '#7b2ff7' }}>🌟</div>
+              <div style={{ fontWeight: 700, fontSize: 20, marginTop: 8 }}>Secret Character</div>
+              <div style={{ color: '#7986a8', marginTop: 4 }}>50 unique cosmic beings</div>
+              <div style={{ color: '#ffd700', fontSize: 18, marginTop: 8 }}>$1,000</div>
+            </div>
+          )}
+          
+          {tab === 'spondlite' && (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 12 }}>
+              {Object.keys(SPONDLITE_CHARS).map(area => (
+                <div key={area} onClick={() => !opening && openSpondlite(area)} style={{
+                  ...S.card, cursor: profile.money >= 200 && !opening ? 'pointer' : 'not-allowed',
+                  opacity: profile.money >= 200 ? 1 : 0.5, textAlign: 'center'
+                }}>
+                  <div style={{ fontSize: 36 }}>{SPONDLITE_ICONS[area]?.area || '💎'}</div>
+                  <div style={{ fontWeight: 700, marginTop: 8 }}>{area}</div>
+                  <div style={{ color: '#7986a8', fontSize: 11 }}>{SPONDLITE_CHARS[area].length} chars</div>
+                  <div style={{ color: '#ffd700', fontSize: 13 }}>$200</div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {opening && !result && (
+            <Modal onClose={() => {}}>
+              <div style={{ textAlign: 'center', padding: 20 }}>
+                <div style={{ fontSize: 64, animation: 'bounce 0.5s infinite' }}>🎁</div>
+                <p style={{ marginTop: 16, color: '#7986a8' }}>Opening...</p>
+              </div>
+            </Modal>
+          )}
+
+          {result && (
+            <Modal onClose={closeResult}>
+              <div style={{ 
+                textAlign: 'center', 
+                position: 'relative', 
+                overflow: 'hidden',
+                minHeight: 350,
+                animation: shake ? 'shake 0.5s' : 'none'
+              }}>
+                {/* Light beams for rare pulls */}
+                {revealPhase >= 2 && resultRarityLevel >= 4 && (
+                  <div style={{
+                    position: 'absolute',
+                    top: '45%',
+                    left: '50%',
+                    width: 350,
+                    height: 350,
+                    transform: 'translate(-50%, -50%)',
+                    background: `radial-gradient(circle, ${RARITIES[resultChar.rarity].color}55 0%, transparent 60%)`,
+                    animation: 'glowPulse 1s infinite',
+                    pointerEvents: 'none'
+                  }} />
+                )}
+                
+                {/* Light rays for epic pulls */}
+                {revealPhase >= 2 && resultRarityLevel >= 6 && (
+                  <>
+                    {[...Array(12)].map((_, i) => (
+                      <div key={i} style={{
+                        position: 'absolute',
+                        top: '45%',
+                        left: '50%',
+                        width: 3,
+                        height: 180,
+                        background: `linear-gradient(to top, ${RARITIES[resultChar.rarity].color}, transparent)`,
+                        transform: `translate(-50%, -100%) rotate(${i * 30}deg)`,
+                        transformOrigin: 'bottom center',
+                        opacity: 0.5,
+                        animation: 'fadeIn 0.5s'
+                      }} />
+                    ))}
+                  </>
+                )}
+                
+                {/* Smooth smoke particles */}
+                {particles.map(p => (
+                  <div key={p.id} style={{
+                    position: 'absolute',
+                    left: p.x + '%',
+                    top: p.y + '%',
+                    width: p.size,
+                    height: p.size,
+                    borderRadius: '50%',
+                    background: `radial-gradient(circle, ${p.color}aa 0%, ${p.color}44 40%, transparent 70%)`,
+                    opacity: p.opacity,
+                    transform: 'translate(-50%, -50%)',
+                    pointerEvents: 'none',
+                    filter: 'blur(3px)'
+                  }} />
+                ))}
+                
+                {/* Confetti */}
+                {confetti.map(c => (
+                  <div key={c.id} style={{
+                    position: 'absolute',
+                    left: c.x + '%',
+                    top: c.y + '%',
+                    width: c.size,
+                    height: c.size * 0.6,
+                    background: c.color,
+                    transform: `rotate(${c.rotation}deg)`,
+                    borderRadius: 2,
+                    pointerEvents: 'none',
+                    boxShadow: `0 0 4px ${c.color}`
+                  }} />
+                ))}
+                
+                {/* Title based on rarity */}
+                <h3 style={{ 
+                  ...S.heading, 
+                  fontSize: resultRarityLevel >= 7 ? 28 : resultRarityLevel >= 4 ? 24 : 20, 
+                  marginBottom: 16,
+                  color: resultRarityLevel >= 5 ? RARITIES[resultChar?.rarity]?.color : '#00d4ff',
+                  textShadow: resultRarityLevel >= 6 ? `0 0 20px ${RARITIES[resultChar?.rarity]?.color}` : 'none',
+                  animation: resultRarityLevel >= 7 ? 'glowPulse 1s infinite' : 'none',
+                  position: 'relative',
+                  zIndex: 20
+                }}>
+                  {resultRarityLevel >= 8 ? '✨ LEGENDARY PULL! ✨' : 
+                   resultRarityLevel >= 6 ? '🔥 EPIC FIND! 🔥' : 
+                   resultRarityLevel >= 4 ? '⭐ Great Pull!' : 
+                   resultRarityLevel >= 2 ? 'Nice!' :
+                   'You got:'}
+                </h3>
+                
+                {/* Character reveal with dynamic animation */}
+                {revealPhase >= 3 && (
+                  <div style={getRevealStyle()}>
+                    <CharCard charId={result} />
+                    {/* Score gained indicator */}
+                    <div style={{
+                      marginTop: 12,
+                      padding: '8px 16px',
+                      background: 'rgba(255,215,0,0.15)',
+                      borderRadius: 8,
+                      display: 'inline-block',
+                      border: '1px solid rgba(255,215,0,0.3)'
+                    }}>
+                      <span style={{ color: '#ffd700', fontWeight: 700 }}>+{newCharScore} Score!</span>
+                    </div>
+                  </div>
+                )}
+                
+                {revealPhase >= 3 && (
+                  <Btn onClick={closeResult} style={{ marginTop: 16, position: 'relative', zIndex: 10 }} variant={resultRarityLevel >= 5 ? 'gold' : 'primary'}>
+                    {resultRarityLevel >= 6 ? '🎉 Amazing!' : 'Collect!'}
+                  </Btn>
+                )}
+              </div>
+            </Modal>
+          )}
+        </div>
+      );
+    }
+
+    function TowerScreen({ profile, updateProfile }) {
+      const [selectedLevel, setSelectedLevel] = useState(0);
+      const [selectedChar, setSelectedChar] = useState(null);
+
+      const towerChars = profile.tower.flat();
+      const availableChars = profile.characters.filter(c => !towerChars.includes(c));
+
+      const addToTower = (charId) => {
+        if (profile.tower[selectedLevel].length >= 5) return;
+        const newTower = [...profile.tower];
+        newTower[selectedLevel] = [...newTower[selectedLevel], charId];
+        updateProfile({ ...profile, tower: newTower });
+        setSelectedChar(null);
+      };
+
+      const removeFromTower = (level, charId) => {
+        const newTower = [...profile.tower];
+        newTower[level] = newTower[level].filter(c => c !== charId);
+        updateProfile({ ...profile, tower: newTower });
+      };
+
+      return (
+        <div style={{ padding: 20, paddingBottom: 100, animation: 'fadeIn 0.3s' }}>
+          <h2 style={{ ...S.heading, fontSize: 24, marginBottom: 16 }}>🗼 Tower</h2>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            {TOWER_LEVELS.map((level, idx) => (
+              <div key={idx} style={{ ...S.card, cursor: 'pointer', border: selectedLevel === idx ? '2px solid #00d4ff' : undefined }} onClick={() => setSelectedLevel(idx)}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                  <span style={{ fontWeight: 700 }}>{level.name}</span>
+                  <span style={{ color: '#4caf50', fontSize: 13 }}>+{Math.round((level.boost - 1) * 100)}% power</span>
+                </div>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  {profile.tower[idx].map(cid => (
+                    <div key={cid} onClick={e => { e.stopPropagation(); removeFromTower(idx, cid); }} style={{ position: 'relative' }}>
+                      <CharCard charId={cid} small />
+                      <div style={{ position: 'absolute', top: -4, right: -4, background: '#ff2d78', borderRadius: '50%', width: 18, height: 18, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, cursor: 'pointer' }}>×</div>
+                    </div>
+                  ))}
+                  {profile.tower[idx].length < 5 && (
+                    <div onClick={e => { e.stopPropagation(); setSelectedChar(true); }} style={{ ...S.card, width: 80, height: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', border: '2px dashed rgba(255,255,255,0.2)' }}>
+                      <span style={{ fontSize: 24, color: '#7986a8' }}>+</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {selectedChar && (
+            <Modal onClose={() => setSelectedChar(null)}>
+              <h3 style={{ ...S.heading, fontSize: 18, marginBottom: 12 }}>Add to {TOWER_LEVELS[selectedLevel].name}</h3>
+              {availableChars.length === 0 ? (
+                <p style={{ color: '#7986a8' }}>No available characters</p>
+              ) : (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, maxHeight: 300, overflow: 'auto' }}>
+                  {availableChars.map(cid => <CharCard key={cid} charId={cid} onClick={() => addToTower(cid)} small />)}
+                </div>
+              )}
+            </Modal>
+          )}
+        </div>
+      );
+    }
+
+    function ShopScreen({ profile, updateProfile }) {
+      const [msg, setMsg] = useState('');
+      const month = new Date().getMonth();
+      const uniqueNames = ['Frosty', 'Lovely', 'Lucky', 'Rainy', 'Flowery', 'Sunny', 'Starry', 'Harvestor', 'Spooky', 'Thankful', 'Snowy', 'Gifted'];
+
+      const buy = (item) => {
+        if (item === 'luck2' && profile.money >= 5000) {
+          updateProfile({ ...profile, money: profile.money - 5000, luckMultiplier: 2, luckUsesRemaining: 10 });
+          setMsg('Luck x2 activated for 10 packs!');
+        } else if (item === 'luck5' && profile.money >= 25000) {
+          updateProfile({ ...profile, money: profile.money - 25000, luckMultiplier: 5, luckUsesRemaining: 10 });
+          setMsg('Luck x5 activated for 10 packs!');
+        } else if (item === 'luck10' && profile.money >= 75000) {
+          updateProfile({ ...profile, money: profile.money - 75000, luckMultiplier: 10, luckUsesRemaining: 10 });
+          setMsg('Luck x10 activated for 10 packs!');
+        } else if (item === 'unique' && profile.money >= 25000) {
+          const charId = `unique_${uniqueNames[month]}_${month}`;
+          if (!ALL_CHARACTERS[charId]) {
+            ALL_CHARACTERS[charId] = { id: charId, name: uniqueNames[month], source: 'unique', rarity: 'Transcendent' };
+          }
+          updateProfile({ ...profile, money: profile.money - 25000, characters: [...profile.characters, charId] });
+          setMsg(`Got ${uniqueNames[month]}!`);
+        }
+        setTimeout(() => setMsg(''), 2000);
+      };
+
+      const luckActive = (profile.luckUsesRemaining || 0) > 0;
+
+      return (
+        <div style={{ padding: 20, paddingBottom: 100, animation: 'fadeIn 0.3s' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+            <h2 style={{ ...S.heading, fontSize: 24 }}>🛒 Shop</h2>
+            <Coins amount={profile.money} />
+          </div>
+          
+          {/* Current luck status */}
+          {luckActive && (
+            <div style={{ 
+              ...S.card, 
+              marginBottom: 16, 
+              padding: '12px 16px',
+              background: 'linear-gradient(135deg, rgba(76,175,80,0.2) 0%, rgba(15,20,40,0.98) 100%)',
+              border: '1px solid rgba(76,175,80,0.3)'
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div>
+                  <span style={{ color: '#4caf50', fontWeight: 700 }}>🍀 Luck x{profile.luckMultiplier} Active!</span>
+                  <div style={{ fontSize: 12, color: '#7986a8', marginTop: 2 }}>{profile.luckUsesRemaining} pack opens remaining</div>
+                </div>
+                <div style={{ 
+                  background: 'rgba(76,175,80,0.2)', 
+                  borderRadius: 20, 
+                  padding: '4px 12px',
+                  fontSize: 14,
+                  fontWeight: 700,
+                  color: '#4caf50'
+                }}>
+                  {profile.luckUsesRemaining}/10
+                </div>
+              </div>
+              <div style={{ marginTop: 8, background: 'rgba(0,0,0,0.3)', borderRadius: 8, height: 6, overflow: 'hidden' }}>
+                <div style={{ 
+                  height: '100%', 
+                  width: `${(profile.luckUsesRemaining / 10) * 100}%`,
+                  background: '#4caf50',
+                  borderRadius: 8,
+                  transition: 'width 0.3s'
+                }} />
+              </div>
+            </div>
+          )}
+          
+          {msg && <div style={{ ...S.card, background: 'linear-gradient(135deg, #4caf50 0%, #2e7d32 100%)', marginBottom: 16, textAlign: 'center' }}>{msg}</div>}
+          <div style={{ display: 'grid', gap: 12 }}>
+            <div style={{ ...S.card }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div>
+                  <div style={{ fontWeight: 700 }}>🍀 Luck x2</div>
+                  <div style={{ color: '#7986a8', fontSize: 12 }}>Better odds (10 packs)</div>
+                </div>
+                <Btn onClick={() => buy('luck2')} disabled={profile.money < 5000} variant="gold">$5,000</Btn>
+              </div>
+            </div>
+            <div style={{ ...S.card }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div>
+                  <div style={{ fontWeight: 700 }}>🍀 Luck x5</div>
+                  <div style={{ color: '#7986a8', fontSize: 12 }}>Much better odds (10 packs)</div>
+                </div>
+                <Btn onClick={() => buy('luck5')} disabled={profile.money < 25000} variant="gold">$25,000</Btn>
+              </div>
+            </div>
+            <div style={{ ...S.card }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div>
+                  <div style={{ fontWeight: 700 }}>🍀 Luck x10</div>
+                  <div style={{ color: '#7986a8', fontSize: 12 }}>Amazing odds (10 packs)</div>
+                </div>
+                <Btn onClick={() => buy('luck10')} disabled={profile.money < 75000} variant="gold">$75,000</Btn>
+              </div>
+            </div>
+            <div style={{ ...S.card, background: 'linear-gradient(135deg, rgba(255,215,0,0.1) 0%, rgba(15,20,40,0.98) 100%)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div>
+                  <div style={{ fontWeight: 700, color: '#ffd700' }}>⭐ {uniqueNames[month]}</div>
+                  <div style={{ color: '#7986a8', fontSize: 12 }}>Monthly exclusive!</div>
+                </div>
+                <Btn onClick={() => buy('unique')} disabled={profile.money < 25000} variant="gold">$25,000</Btn>
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    function FriendsScreen({ profile, updateProfile, setScreen, setTradeTarget }) {
+      return (
+        <div style={{ padding: 20, paddingBottom: 100, animation: 'fadeIn 0.3s' }}>
+          <h2 style={{ ...S.heading, fontSize: 24, marginBottom: 16 }}>👥 Friends</h2>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {(profile.friends || BOT_FRIENDS).map(friend => (
+              <div key={friend} style={{ ...S.card, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <div style={{ width: 40, height: 40, borderRadius: '50%', background: 'linear-gradient(135deg, #00d4ff 0%, #7b2ff7 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    {friend[0]}
+                  </div>
+                  <div>
+                    <div style={{ fontWeight: 700 }}>{friend}</div>
+                    <div style={{ color: '#4caf50', fontSize: 11 }}>● Online</div>
+                  </div>
+                </div>
+                <Btn variant="secondary" onClick={() => { setTradeTarget(friend); setScreen('trade'); }}>Trade</Btn>
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    function TradeScreen({ profile, updateProfile, target, onBack }) {
+      const [myOffer, setMyOffer] = useState([]);
+      const [theirOffer, setTheirOffer] = useState([]);
+      const [confirmed, setConfirmed] = useState(false);
+
+      const getBotChars = (name) => {
+        const seed = name.split('').reduce((a, c) => a + c.charCodeAt(0), 0);
+        const chars = [];
+        const allIds = Object.keys(ALL_CHARACTERS);
+        for (let i = 0; i < 15; i++) {
+          const idx = Math.floor(seededRandom(seed + i) * allIds.length);
+          chars.push(allIds[idx]);
+        }
+        return chars;
+      };
+
+      const botChars = getBotChars(target);
+      const availableTheirChars = botChars.filter(c => !theirOffer.includes(c));
+
+      const completeTrade = () => {
+        if (myOffer.length === 0 || theirOffer.length === 0) return;
+        const newChars = profile.characters.filter(c => !myOffer.includes(c)).concat(theirOffer);
+        updateProfile({ ...profile, characters: newChars });
+        setConfirmed(true);
+      };
+
+      if (confirmed) {
+        return (
+          <div style={{ padding: 20, textAlign: 'center', animation: 'fadeIn 0.3s' }}>
+            <div style={{ fontSize: 64 }}>🤝</div>
+            <h2 style={{ ...S.heading, fontSize: 24, marginTop: 16 }}>Trade Complete!</h2>
+            <Btn onClick={onBack} style={{ marginTop: 24 }}>Done</Btn>
+          </div>
+        );
+      }
+
+      return (
+        <div style={{ padding: 20, paddingBottom: 100, animation: 'fadeIn 0.3s' }}>
+          <Btn variant="secondary" onClick={onBack} style={{ marginBottom: 16 }}>← Back</Btn>
+          <h2 style={{ ...S.heading, fontSize: 20, marginBottom: 16 }}>Trading with {target}</h2>
+          
+          <div style={{ ...S.card, marginBottom: 12 }}>
+            <h3 style={{ fontWeight: 700, marginBottom: 8 }}>Your Offer</h3>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', minHeight: 60 }}>
+              {myOffer.map(c => <CharCard key={c} charId={c} onClick={() => setMyOffer(myOffer.filter(x => x !== c))} small />)}
+            </div>
+            <div style={{ marginTop: 8, maxHeight: 150, overflow: 'auto' }}>
+              <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                {profile.characters.filter(c => !myOffer.includes(c)).map(c => (
+                  <CharCard key={c} charId={c} onClick={() => setMyOffer([...myOffer, c])} small />
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <div style={{ ...S.card, marginBottom: 12 }}>
+            <h3 style={{ fontWeight: 700, marginBottom: 8 }}>{target}'s Offer</h3>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', minHeight: 60 }}>
+              {theirOffer.map(c => <CharCard key={c} charId={c} onClick={() => setTheirOffer(theirOffer.filter(x => x !== c))} small />)}
+            </div>
+            <div style={{ marginTop: 8, maxHeight: 150, overflow: 'auto' }}>
+              <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                {availableTheirChars.map(c => (
+                  <CharCard key={c} charId={c} onClick={() => setTheirOffer([...theirOffer, c])} small />
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <Btn onClick={completeTrade} disabled={myOffer.length === 0 || theirOffer.length === 0} variant="gold" style={{ width: '100%' }}>
+            Confirm Trade
+          </Btn>
+        </div>
+      );
+    }
+
+    // ==================== MULTIPLAYER LOBBY ====================
+    function MultiplayerLobby({ gameType, profile, onStart, onBack }) {
+      const [mode, setMode] = useState(null);
+      const [code, setCode] = useState('');
+      const [hostCode, setHostCode] = useState('');
+      const [waiting, setWaiting] = useState(false);
+      const [players, setPlayers] = useState([]);
+      const [error, setError] = useState('');
+      const pollRef = useRef(null);
+
+      const hostGame = async () => {
+        const newCode = generateCode();
+        setHostCode(newCode);
+        setWaiting(true);
+        setPlayers([profile.username]);
+        
+        await storage.set(`game_${newCode}`, JSON.stringify({
+          type: gameType,
+          host: profile.username,
+          players: [profile.username],
+          status: 'waiting',
+          created: Date.now()
+        }), true);
+
+        pollRef.current = setInterval(async () => {
+          try {
+            const res = await storage.get(`game_${newCode}`, true);
+            if (res) {
+              const game = JSON.parse(res.value);
+              setPlayers(game.players);
+              if (game.status === 'starting') {
+                clearInterval(pollRef.current);
+                onStart({ code: newCode, players: game.players, isHost: true });
+              }
+            }
+          } catch {}
+        }, 1000);
+      };
+
+      const joinGame = async () => {
+        if (code.length !== 6) { setError('Code must be 6 characters'); return; }
+        setError('');
+        try {
+          const res = await storage.get(`game_${code.toUpperCase()}`, true);
+          if (!res) { setError('Game not found'); return; }
+          const game = JSON.parse(res.value);
+          if (game.type !== gameType) { setError('Wrong game type'); return; }
+          if (game.status !== 'waiting') { setError('Game already started'); return; }
+          if (game.players.includes(profile.username)) { setError('Already in game'); return; }
+          
+          game.players.push(profile.username);
+          await storage.set(`game_${code.toUpperCase()}`, JSON.stringify(game), true);
+          
+          setHostCode(code.toUpperCase());
+          setWaiting(true);
+          setPlayers(game.players);
+
+          pollRef.current = setInterval(async () => {
+            try {
+              const res2 = await storage.get(`game_${code.toUpperCase()}`, true);
+              if (res2) {
+                const g = JSON.parse(res2.value);
+                setPlayers(g.players);
+                if (g.status === 'starting') {
+                  clearInterval(pollRef.current);
+                  onStart({ code: code.toUpperCase(), players: g.players, isHost: false });
+                }
+              }
+            } catch {}
+          }, 1000);
+        } catch (e) { setError('Error joining: ' + e.message); }
+      };
+
+      const startGame = async () => {
+        try {
+          const res = await storage.get(`game_${hostCode}`, true);
+          if (res) {
+            const game = JSON.parse(res.value);
+            game.status = 'starting';
+            await storage.set(`game_${hostCode}`, JSON.stringify(game), true);
+          }
+        } catch {}
+      };
+
+      const cancelGame = async () => {
+        clearInterval(pollRef.current);
+        if (hostCode) {
+          await storage.delete(`game_${hostCode}`, true);
+        }
+        setMode(null);
+        setWaiting(false);
+        setHostCode('');
+        setPlayers([]);
+      };
+
+      useEffect(() => {
+        return () => clearInterval(pollRef.current);
+      }, []);
+
+      if (waiting) {
+        return (
+          <div style={{ padding: 20, textAlign: 'center', animation: 'fadeIn 0.3s' }}>
+            <h2 style={{ ...S.heading, fontSize: 24, marginBottom: 16 }}>Lobby</h2>
+            <div style={{ ...S.card, marginBottom: 16 }}>
+              <p style={{ color: '#7986a8', marginBottom: 8 }}>Share this code:</p>
+              <div style={{ fontSize: 36, fontFamily: "'Bungee', cursive", color: '#00d4ff', letterSpacing: 8 }}>{hostCode}</div>
+            </div>
+            <div style={{ ...S.card, marginBottom: 16 }}>
+              <p style={{ fontWeight: 700, marginBottom: 8 }}>Players ({players.length})</p>
+              {players.map(p => (
+                <div key={p} style={{ padding: '8px 0', borderBottom: '1px solid rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#4caf50' }} />
+                  {p} {p === profile.username && '(you)'}
+                </div>
+              ))}
+            </div>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
+              {mode === 'host' && players.length >= 1 && (
+                <Btn variant="gold" onClick={startGame}>Start Game</Btn>
+              )}
+              <Btn variant="danger" onClick={cancelGame}>Cancel</Btn>
+            </div>
+          </div>
+        );
+      }
+
+      if (!mode) {
+        return (
+          <div style={{ padding: 20, animation: 'fadeIn 0.3s' }}>
+            <Btn variant="secondary" onClick={onBack} style={{ marginBottom: 16 }}>← Back</Btn>
+            <h2 style={{ ...S.heading, fontSize: 24, marginBottom: 24, textAlign: 'center' }}>Play {gameType}</h2>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <div style={{ ...S.card, cursor: 'pointer', textAlign: 'center' }} onClick={() => setMode('host')}>
+                <div style={{ fontSize: 36 }}>🏠</div>
+                <div style={{ fontWeight: 700, marginTop: 8 }}>Host Game</div>
+                <div style={{ color: '#7986a8', fontSize: 12 }}>Create a room for others to join</div>
+              </div>
+              <div style={{ ...S.card, cursor: 'pointer', textAlign: 'center' }} onClick={() => setMode('join')}>
+                <div style={{ fontSize: 36 }}>🎮</div>
+                <div style={{ fontWeight: 700, marginTop: 8 }}>Join Game</div>
+                <div style={{ color: '#7986a8', fontSize: 12 }}>Enter a code to join</div>
+              </div>
+              <div style={{ ...S.card, cursor: 'pointer', textAlign: 'center' }} onClick={() => onStart({ solo: true })}>
+                <div style={{ fontSize: 36 }}>🤖</div>
+                <div style={{ fontWeight: 700, marginTop: 8 }}>Play Solo</div>
+                <div style={{ color: '#7986a8', fontSize: 12 }}>Practice against bots</div>
+              </div>
+            </div>
+          </div>
+        );
+      }
+
+      if (mode === 'host') {
+        return (
+          <div style={{ padding: 20, textAlign: 'center', animation: 'fadeIn 0.3s' }}>
+            <Btn variant="secondary" onClick={() => setMode(null)} style={{ marginBottom: 16 }}>← Back</Btn>
+            <h2 style={{ ...S.heading, fontSize: 24, marginBottom: 16 }}>Host Game</h2>
+            <Btn variant="gold" onClick={hostGame}>Create Room</Btn>
+          </div>
+        );
+      }
+
+      return (
+        <div style={{ padding: 20, animation: 'fadeIn 0.3s' }}>
+          <Btn variant="secondary" onClick={() => setMode(null)} style={{ marginBottom: 16 }}>← Back</Btn>
+          <h2 style={{ ...S.heading, fontSize: 24, marginBottom: 16, textAlign: 'center' }}>Join Game</h2>
+          <input
+            type="text"
+            placeholder="Enter 6-digit code"
+            value={code}
+            onChange={e => setCode(e.target.value.toUpperCase().slice(0, 6))}
+            style={{ ...S.input, textAlign: 'center', fontSize: 24, letterSpacing: 8, fontFamily: "'Bungee', cursive", marginBottom: 12 }}
+          />
+          {error && <p style={{ color: '#ff5252', textAlign: 'center', marginBottom: 12 }}>{error}</p>}
+          <Btn onClick={joinGame} style={{ width: '100%' }} disabled={code.length !== 6}>Join</Btn>
+        </div>
+      );
+    }
+
+    // ==================== GAMES ====================
+    function DefeatedGame({ profile, updateProfile, onBack, gameInfo }) {
+      const [phase, setPhase] = useState('select');
+      const [myChar, setMyChar] = useState(null);
+      const [enemyChar, setEnemyChar] = useState(null);
+      const [myHp, setMyHp] = useState(100);
+      const [enemyHp, setEnemyHp] = useState(100);
+      const [log, setLog] = useState([]);
+      const [turn, setTurn] = useState('player');
+      const [done, setDone] = useState(false);
+      const [powerMoveUsed, setPowerMoveUsed] = useState(false);
+
+      const getTowerBoost = (charId) => {
+        for (let i = 0; i < 4; i++) {
+          if (profile.tower[i]?.includes(charId)) return TOWER_LEVELS[i].boost;
+        }
+        return 1;
+      };
+
+      const startBattle = (charId) => {
+        setMyChar(charId);
+        const allIds = Object.keys(ALL_CHARACTERS);
+        const enemyId = allIds[Math.floor(Math.random() * allIds.length)];
+        setEnemyChar(enemyId);
+        
+        const myPower = getCharPower(charId) * getTowerBoost(charId);
+        const enemyPower = getCharPower(enemyId);
+        
+        setMyHp(Math.floor(myPower / 2) + 50);
+        setEnemyHp(Math.floor(enemyPower / 2) + 50);
+        setPhase('battle');
+        setLog([`Battle started! ${ALL_CHARACTERS[charId].name} vs ${ALL_CHARACTERS[enemyId].name}`]);
+      };
+
+      const attack = (isPowerMove = false) => {
+        if (turn !== 'player' || done) return;
+        if (isPowerMove && powerMoveUsed) return;
+        
+        const myPower = getCharPower(myChar) * getTowerBoost(myChar);
+        let dmg = Math.floor(myPower / 15) + Math.floor(Math.random() * 10);
+        if (isPowerMove) {
+          dmg = Math.floor(dmg * 2.5);
+          setPowerMoveUsed(true);
+        }
+        
+        const newEnemyHp = Math.max(0, enemyHp - dmg);
+        setEnemyHp(newEnemyHp);
+        setLog(l => [...l, `${ALL_CHARACTERS[myChar].name} deals ${dmg} damage!`]);
+        
+        if (newEnemyHp <= 0) {
+          endBattle(true);
+          return;
+        }
+        
+        setTurn('enemy');
+        setTimeout(() => enemyAttack(newEnemyHp), 1000);
+      };
+
+      const defend = () => {
+        if (turn !== 'player' || done) return;
+        setLog(l => [...l, `${ALL_CHARACTERS[myChar].name} braces for impact!`]);
+        setTurn('enemy');
+        setTimeout(() => enemyAttack(enemyHp, true), 1000);
+      };
+
+      const enemyAttack = (currentEnemyHp, defending = false) => {
+        if (currentEnemyHp <= 0) return;
+        const enemyPower = getCharPower(enemyChar);
+        let dmg = Math.floor(enemyPower / 15) + Math.floor(Math.random() * 10);
+        if (defending) dmg = Math.floor(dmg * 0.3);
+        
+        const newMyHp = Math.max(0, myHp - dmg);
+        setMyHp(newMyHp);
+        setLog(l => [...l, `${ALL_CHARACTERS[enemyChar].name} deals ${dmg} damage!${defending ? ' (blocked!)' : ''}`]);
+        
+        if (newMyHp <= 0) {
+          endBattle(false);
+          return;
+        }
+        setTurn('player');
+      };
+
+      const endBattle = (won) => {
+        setDone(true);
+        if (won) {
+          const reward = 50 + Math.floor(Math.random() * 50);
+          updateProfile({ ...profile, money: profile.money + reward });
+          setLog(l => [...l, `Victory! Earned $${reward}`]);
+        } else {
+          setLog(l => [...l, `Defeated! Better luck next time.`]);
+        }
+      };
+
+      if (phase === 'select') {
+        return (
+          <div style={{ padding: 20, animation: 'fadeIn 0.3s' }}>
+            <Btn variant="secondary" onClick={onBack} style={{ marginBottom: 16 }}>← Back</Btn>
+            <h2 style={{ ...S.heading, fontSize: 22, marginBottom: 16 }}>⚔️ Select Your Fighter</h2>
+            {profile.characters.length === 0 ? (
+              <div style={{ ...S.card, textAlign: 'center' }}>
+                <p style={{ color: '#7986a8' }}>You need characters to battle!</p>
+              </div>
+            ) : (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(100px, 1fr))', gap: 8 }}>
+                {profile.characters.map(cid => (
+                  <CharCard key={cid} charId={cid} onClick={() => startBattle(cid)} small />
+                ))}
+              </div>
+            )}
+          </div>
+        );
+      }
+
+      return (
+        <div style={{ padding: 20, animation: 'fadeIn 0.3s' }}>
+          <h2 style={{ ...S.heading, fontSize: 20, marginBottom: 16, textAlign: 'center' }}>⚔️ Battle!</h2>
+          
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, marginBottom: 16 }}>
+            <div style={{ ...S.card, flex: 1, textAlign: 'center' }}>
+              <div style={{ fontSize: 11, color: '#7986a8' }}>YOU</div>
+              <div style={{ fontWeight: 700, color: RARITIES[ALL_CHARACTERS[myChar]?.rarity]?.color }}>{ALL_CHARACTERS[myChar]?.name}</div>
+              <div style={{ marginTop: 8, background: 'rgba(76,175,80,0.2)', borderRadius: 8, height: 20, overflow: 'hidden' }}>
+                <div style={{ background: '#4caf50', height: '100%', width: `${(myHp / (getCharPower(myChar) * getTowerBoost(myChar) / 2 + 50)) * 100}%`, transition: 'width 0.3s' }} />
+              </div>
+              <div style={{ fontSize: 12, marginTop: 4 }}>HP: {myHp}</div>
+            </div>
+            <div style={{ ...S.card, flex: 1, textAlign: 'center' }}>
+              <div style={{ fontSize: 11, color: '#7986a8' }}>ENEMY</div>
+              <div style={{ fontWeight: 700, color: RARITIES[ALL_CHARACTERS[enemyChar]?.rarity]?.color }}>{ALL_CHARACTERS[enemyChar]?.name}</div>
+              <div style={{ marginTop: 8, background: 'rgba(244,67,54,0.2)', borderRadius: 8, height: 20, overflow: 'hidden' }}>
+                <div style={{ background: '#f44336', height: '100%', width: `${(enemyHp / (getCharPower(enemyChar) / 2 + 50)) * 100}%`, transition: 'width 0.3s' }} />
+              </div>
+              <div style={{ fontSize: 12, marginTop: 4 }}>HP: {enemyHp}</div>
+            </div>
+          </div>
+
+          <div style={{ ...S.card, height: 120, overflow: 'auto', marginBottom: 16, fontSize: 12 }}>
+            {log.map((l, i) => <div key={i} style={{ padding: '4px 0', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>{l}</div>)}
+          </div>
+
+          {!done ? (
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
+              <Btn onClick={() => attack()} disabled={turn !== 'player'}>Attack</Btn>
+              <Btn onClick={() => attack(true)} disabled={turn !== 'player' || powerMoveUsed} variant="gold">Power Move</Btn>
+              <Btn onClick={defend} disabled={turn !== 'player'} variant="secondary">Defend</Btn>
+            </div>
+          ) : (
+            <div style={{ textAlign: 'center' }}>
+              <Btn onClick={onBack} variant="gold">Done</Btn>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    function ClimbGame({ profile, updateProfile, onBack }) {
+      const canvasRef = useRef(null);
+      const [gameState, setGameState] = useState('start');
+      const [score, setScore] = useState(0);
+      const keysRef = useRef({});
+      const gameRef = useRef({
+        player: { x: 300, y: 500, vy: 0, vx: 0, onGround: false, doubleJump: false, shield: 0, speed: 1 },
+        platforms: [],
+        hazards: [],
+        powerups: [],
+        particles: [],
+        camera: 0,
+        highestY: 500,
+        floor: { exists: true, opacity: 1 }
+      });
+
+      const initGame = () => {
+        const g = gameRef.current;
+        // Reset keys to prevent stuck movement
+        keysRef.current = {};
+        g.player = { x: 300, y: 520, vy: 0, vx: 0, onGround: true, doubleJump: true, shield: 0, speed: 1 };
+        g.platforms = [];
+        g.hazards = [];
+        g.powerups = [];
+        g.particles = [];
+        g.camera = 0;
+        g.highestY = 520;
+        g.floor = { exists: true, opacity: 1 };
+        
+        // Generate initial platforms (starting higher up since we have a floor)
+        for (let i = 0; i < 30; i++) {
+          const y = 450 - i * 80;
+          const type = Math.random() < 0.15 ? 'moving' : Math.random() < 0.1 ? 'crumbling' : 'normal';
+          g.platforms.push({
+            x: 50 + Math.random() * 500,
+            y,
+            w: 60 + Math.random() * 40,
+            type,
+            dir: Math.random() < 0.5 ? 1 : -1,
+            life: 100
+          });
+          
+          // Add hazards on some platforms (not on early ones)
+          if (i > 5 && Math.random() < 0.2) {
+            g.hazards.push({
+              x: 50 + Math.random() * 500,
+              y: y - 30,
+              type: Math.random() < 0.5 ? 'spike' : 'bird',
+              vx: Math.random() < 0.5 ? 2 : -2
+            });
+          }
+          
+          // Add powerups
+          if (Math.random() < 0.1) {
+            const types = ['doubleJump', 'shield', 'speed', 'points'];
+            g.powerups.push({
+              x: 50 + Math.random() * 500,
+              y: y - 40,
+              type: types[Math.floor(Math.random() * types.length)],
+              collected: false
+            });
+          }
+        }
+        
+        setGameState('playing');
+        setScore(0);
+      };
+
+      useEffect(() => {
+        if (gameState !== 'playing') return;
+        
+        const canvas = canvasRef.current;
+        const ctx = canvas.getContext('2d');
+        const g = gameRef.current;
+        const keys = keysRef.current;
+        
+        const handleKeyDown = (e) => { 
+          keys[e.key.toLowerCase()] = true;
+          if (e.key === 'ArrowLeft') keys.left = true;
+          if (e.key === 'ArrowRight') keys.right = true;
+          if (e.key === 'ArrowUp' || e.key === ' ') keys.jump = true;
+        };
+        const handleKeyUp = (e) => { 
+          keys[e.key.toLowerCase()] = false;
+          if (e.key === 'ArrowLeft') keys.left = false;
+          if (e.key === 'ArrowRight') keys.right = false;
+          if (e.key === 'ArrowUp' || e.key === ' ') keys.jump = false;
+        };
+        
+        // Clear keys on blur to prevent stuck keys
+        const handleBlur = () => {
+          Object.keys(keys).forEach(k => keys[k] = false);
+        };
+        
+        window.addEventListener('keydown', handleKeyDown);
+        window.addEventListener('keyup', handleKeyUp);
+        window.addEventListener('blur', handleBlur);
+        
+        let animId;
+        const gameLoop = () => {
+          // Input - check both arrow keys and WASD
+          const moveSpeed = 5 * g.player.speed;
+          const goLeft = keys.left || keys.a;
+          const goRight = keys.right || keys.d;
+          const goJump = keys.jump || keys.w;
+          
+          if (goLeft && !goRight) {
+            g.player.vx = -moveSpeed;
+          } else if (goRight && !goLeft) {
+            g.player.vx = moveSpeed;
+          } else {
+            g.player.vx *= 0.85;
+            if (Math.abs(g.player.vx) < 0.1) g.player.vx = 0;
+          }
+          
+          if (goJump && (g.player.onGround || g.player.doubleJump)) {
+            g.player.vy = -15;
+            if (!g.player.onGround) g.player.doubleJump = false;
+            g.player.onGround = false;
+            keys.jump = false; keys.w = false;
+            
+            // Jump particles
+            for (let i = 0; i < 5; i++) {
+              g.particles.push({ x: g.player.x, y: g.player.y + 15, vx: (Math.random() - 0.5) * 4, vy: Math.random() * 2, life: 20, color: '#00d4ff' });
+            }
+          }
+          
+          // Physics
+          g.player.vy += 0.6;
+          g.player.x += g.player.vx;
+          g.player.y += g.player.vy;
+          g.player.onGround = false;
+          
+          // Wrap around
+          if (g.player.x < 0) g.player.x = 600;
+          if (g.player.x > 600) g.player.x = 0;
+          
+          // Floor collision and fading
+          if (g.floor.exists) {
+            if (g.player.y > 550 && g.player.vy > 0) {
+              g.player.y = 550;
+              g.player.vy = 0;
+              g.player.onGround = true;
+              g.player.doubleJump = true;
+            }
+            
+            // Fade floor as player climbs
+            if (g.player.y < 400) {
+              g.floor.opacity = Math.max(0, (g.player.y - 200) / 200);
+              if (g.floor.opacity <= 0) {
+                g.floor.exists = false;
+              }
+            }
+          }
+          
+          // Update camera
+          if (g.player.y < g.camera + 200) {
+            g.camera = g.player.y - 200;
+          }
+          
+          // Track highest point
+          if (g.player.y < g.highestY) {
+            g.highestY = g.player.y;
+            setScore(Math.floor((520 - g.highestY) / 10));
+          }
+          
+          // Update moving platforms
+          g.platforms.forEach(p => {
+            if (p.type === 'moving') {
+              p.x += p.dir * 2;
+              if (p.x < 50 || p.x > 550) p.dir *= -1;
+            }
+          });
+          
+          // Update hazards
+          g.hazards.forEach(h => {
+            if (h.type === 'bird') {
+              h.x += h.vx;
+              if (h.x < 0 || h.x > 600) h.vx *= -1;
+            }
+          });
+          
+          // Platform collision
+          g.platforms.forEach(p => {
+            if (g.player.vy > 0 &&
+                g.player.x > p.x - 15 && g.player.x < p.x + p.w + 15 &&
+                g.player.y > p.y - 20 && g.player.y < p.y + 10) {
+              g.player.y = p.y - 15;
+              g.player.vy = 0;
+              g.player.onGround = true;
+              g.player.doubleJump = true;
+              
+              if (p.type === 'crumbling') {
+                p.life -= 5;
+                if (p.life <= 0) {
+                  p.y = 9999;
+                }
+              }
+            }
+          });
+          
+          // Hazard collision
+          g.hazards.forEach(h => {
+            const dx = Math.abs(g.player.x - h.x);
+            const dy = Math.abs(g.player.y - h.y);
+            if (dx < 25 && dy < 25) {
+              if (g.player.shield > 0) {
+                g.player.shield--;
+                h.y = 9999;
+              } else {
+                setGameState('gameover');
+              }
+            }
+          });
+          
+          // Powerup collision
+          g.powerups.forEach(p => {
+            if (!p.collected) {
+              const dx = Math.abs(g.player.x - p.x);
+              const dy = Math.abs(g.player.y - p.y);
+              if (dx < 30 && dy < 30) {
+                p.collected = true;
+                if (p.type === 'doubleJump') g.player.doubleJump = true;
+                if (p.type === 'shield') g.player.shield = 3;
+                if (p.type === 'speed') { g.player.speed = 1.5; setTimeout(() => g.player.speed = 1, 5000); }
+                if (p.type === 'points') setScore(s => s + 50);
+                
+                for (let i = 0; i < 10; i++) {
+                  g.particles.push({ x: p.x, y: p.y, vx: (Math.random() - 0.5) * 6, vy: (Math.random() - 0.5) * 6, life: 30, color: '#ffd700' });
+                }
+              }
+            }
+          });
+          
+          // Update particles
+          g.particles = g.particles.filter(p => {
+            p.x += p.vx;
+            p.y += p.vy;
+            p.life--;
+            return p.life > 0;
+          });
+          
+          // Generate new platforms
+          while (g.platforms[g.platforms.length - 1].y > g.camera - 100) {
+            const lastY = g.platforms[g.platforms.length - 1].y;
+            const type = Math.random() < 0.2 ? 'moving' : Math.random() < 0.15 ? 'crumbling' : 'normal';
+            g.platforms.push({
+              x: 50 + Math.random() * 500,
+              y: lastY - 60 - Math.random() * 40,
+              w: 50 + Math.random() * 40,
+              type,
+              dir: Math.random() < 0.5 ? 1 : -1,
+              life: 100
+            });
+            
+            if (Math.random() < 0.25) {
+              g.hazards.push({
+                x: 50 + Math.random() * 500,
+                y: lastY - 90,
+                type: Math.random() < 0.5 ? 'spike' : 'bird',
+                vx: Math.random() < 0.5 ? 2 : -2
+              });
+            }
+            
+            if (Math.random() < 0.12) {
+              const types = ['doubleJump', 'shield', 'speed', 'points'];
+              g.powerups.push({
+                x: 50 + Math.random() * 500,
+                y: lastY - 80,
+                type: types[Math.floor(Math.random() * types.length)],
+                collected: false
+              });
+            }
+          }
+          
+          // Fall death (only after floor disappears)
+          if (g.player.y > g.camera + 650) {
+            setGameState('gameover');
+            return;
+          }
+          
+          // RENDER
+          ctx.fillStyle = '#0a0e27';
+          ctx.fillRect(0, 0, 600, 600);
+          
+          // Stars background
+          ctx.fillStyle = '#ffffff22';
+          for (let i = 0; i < 50; i++) {
+            const starY = ((i * 73 + g.camera * 0.3) % 700);
+            ctx.fillRect((i * 137) % 600, starY, 2, 2);
+          }
+          
+          // Draw floor if it exists
+          if (g.floor.exists && g.floor.opacity > 0) {
+            const floorScreenY = 560 - g.camera;
+            if (floorScreenY > -20 && floorScreenY < 620) {
+              ctx.globalAlpha = g.floor.opacity;
+              // Main floor
+              ctx.fillStyle = '#8b4513';
+              ctx.fillRect(0, floorScreenY, 600, 40);
+              // Floor top
+              ctx.fillStyle = '#a0522d';
+              ctx.fillRect(0, floorScreenY, 600, 8);
+              // Floor grass
+              ctx.fillStyle = '#228b22';
+              ctx.fillRect(0, floorScreenY - 5, 600, 8);
+              // Floor pattern
+              ctx.fillStyle = '#654321';
+              for (let i = 0; i < 12; i++) {
+                ctx.fillRect(i * 50, floorScreenY + 15, 45, 20);
+              }
+              ctx.globalAlpha = 1;
+            }
+          }
+          
+          // Platforms
+          g.platforms.forEach(p => {
+            const screenY = p.y - g.camera;
+            if (screenY > -20 && screenY < 620) {
+              if (p.type === 'moving') {
+                ctx.fillStyle = '#ff9800';
+              } else if (p.type === 'crumbling') {
+                ctx.fillStyle = `rgba(156, 39, 176, ${p.life / 100})`;
+              } else {
+                ctx.fillStyle = '#4caf50';
+              }
+              ctx.fillRect(p.x, screenY, p.w, 12);
+              ctx.fillStyle = '#ffffff33';
+              ctx.fillRect(p.x, screenY, p.w, 3);
+            }
+          });
+          
+          // Hazards
+          g.hazards.forEach(h => {
+            const screenY = h.y - g.camera;
+            if (screenY > -30 && screenY < 620) {
+              if (h.type === 'spike') {
+                ctx.fillStyle = '#f44336';
+                ctx.beginPath();
+                ctx.moveTo(h.x, screenY);
+                ctx.lineTo(h.x - 12, screenY + 20);
+                ctx.lineTo(h.x + 12, screenY + 20);
+                ctx.fill();
+              } else {
+                ctx.fillStyle = '#ff5722';
+                ctx.beginPath();
+                ctx.arc(h.x, screenY, 15, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.fillStyle = '#fff';
+                ctx.font = '16px Arial';
+                ctx.fillText('🦅', h.x - 10, screenY + 5);
+              }
+            }
+          });
+          
+          // Powerups
+          g.powerups.forEach(p => {
+            if (!p.collected) {
+              const screenY = p.y - g.camera;
+              if (screenY > -30 && screenY < 620) {
+                ctx.fillStyle = '#ffd700';
+                ctx.beginPath();
+                ctx.arc(p.x, screenY, 12, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.fillStyle = '#000';
+                ctx.font = '12px Arial';
+                const icons = { doubleJump: '⬆', shield: '🛡', speed: '⚡', points: '💰' };
+                ctx.fillText(icons[p.type], p.x - 6, screenY + 4);
+              }
+            }
+          });
+          
+          // Particles
+          g.particles.forEach(p => {
+            ctx.fillStyle = p.color;
+            ctx.globalAlpha = p.life / 30;
+            ctx.fillRect(p.x - 2, p.y - g.camera - 2, 4, 4);
+          });
+          ctx.globalAlpha = 1;
+          
+          // Player
+          const playerScreenY = g.player.y - g.camera;
+          if (g.player.shield > 0) {
+            ctx.strokeStyle = '#00d4ff';
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.arc(g.player.x, playerScreenY, 22, 0, Math.PI * 2);
+            ctx.stroke();
+          }
+          ctx.fillStyle = g.player.speed > 1 ? '#ffeb3b' : '#00d4ff';
+          ctx.beginPath();
+          ctx.arc(g.player.x, playerScreenY, 15, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = '#fff';
+          ctx.beginPath();
+          ctx.arc(g.player.x - 5, playerScreenY - 3, 4, 0, Math.PI * 2);
+          ctx.arc(g.player.x + 5, playerScreenY - 3, 4, 0, Math.PI * 2);
+          ctx.fill();
+          
+          // UI
+          ctx.fillStyle = '#fff';
+          ctx.font = '20px Quicksand';
+          ctx.fillText(`Score: ${Math.floor((520 - g.highestY) / 10)}`, 10, 30);
+          if (g.player.shield > 0) ctx.fillText(`🛡 x${g.player.shield}`, 10, 55);
+          
+          animId = requestAnimationFrame(gameLoop);
+        };
+        
+        gameLoop();
+        
+        return () => {
+          cancelAnimationFrame(animId);
+          window.removeEventListener('keydown', handleKeyDown);
+          window.removeEventListener('keyup', handleKeyUp);
+          window.removeEventListener('blur', handleBlur);
+        };
+      }, [gameState]);
+
+      useEffect(() => {
+        if (gameState === 'gameover') {
+          const reward = Math.floor(score / 2) + 10;
+          updateProfile({ ...profile, money: profile.money + reward });
+        }
+      }, [gameState]);
+
+      return (
+        <div style={{ padding: 20, animation: 'fadeIn 0.3s' }}>
+          <Btn variant="secondary" onClick={onBack} style={{ marginBottom: 16 }}>← Back</Btn>
+          <h2 style={{ ...S.heading, fontSize: 22, marginBottom: 16 }}>🧗 Climb</h2>
+          
+          {gameState === 'start' && (
+            <div style={{ textAlign: 'center' }}>
+              <p style={{ color: '#7986a8', marginBottom: 16 }}>Jump higher and higher! Avoid hazards, collect powerups!</p>
+              <p style={{ color: '#556', fontSize: 12, marginBottom: 16 }}>⬆️ Double Jump | 🛡️ Shield | ⚡ Speed | 💰 Points</p>
+              <Btn onClick={initGame} variant="gold">Start Climbing!</Btn>
+            </div>
+          )}
+          
+          {gameState === 'playing' && (
+            <div style={{ display: 'flex', justifyContent: 'center' }}>
+              <canvas ref={canvasRef} width={600} height={600} style={{ borderRadius: 16, border: '2px solid rgba(255,255,255,0.1)', maxWidth: '100%' }} />
+            </div>
+          )}
+          
+          {gameState === 'gameover' && (
+            <div style={{ textAlign: 'center' }}>
+              <div style={{ fontSize: 64 }}>😵</div>
+              <h3 style={{ ...S.heading, fontSize: 24, marginTop: 16 }}>Game Over!</h3>
+              <p style={{ fontSize: 20, marginTop: 8 }}>Score: {score}</p>
+              <p style={{ color: '#ffd700', marginTop: 8 }}>💰 Earned ${Math.floor(score / 2) + 10}</p>
+              <div style={{ marginTop: 16, display: 'flex', gap: 8, justifyContent: 'center' }}>
+                <Btn onClick={initGame} variant="gold">Play Again</Btn>
+                <Btn onClick={onBack} variant="secondary">Back</Btn>
+              </div>
+            </div>
+          )}
+          
+          {gameState === 'playing' && (
+            <p style={{ color: '#556', fontSize: 11, marginTop: 8, textAlign: 'center' }}>Arrow Keys / WASD to move, Up/W/Space to jump</p>
+          )}
+        </div>
+      );
+    }
+
+    function StudyGame({ profile, updateProfile, onBack }) {
+      const [questions, setQuestions] = useState([]);
+      const [current, setCurrent] = useState(0);
+      const [score, setScore] = useState(0);
+      const [answered, setAnswered] = useState(null);
+      const [done, setDone] = useState(false);
+
+      useEffect(() => {
+        const shuffled = [...QUIZ_QUESTIONS].sort(() => Math.random() - 0.5).slice(0, 10);
+        setQuestions(shuffled);
+      }, []);
+
+      const answer = (idx) => {
+        if (answered !== null) return;
+        setAnswered(idx);
+        if (idx === questions[current].correct) setScore(s => s + 1);
+        setTimeout(() => {
+          if (current < 9) {
+            setCurrent(c => c + 1);
+            setAnswered(null);
+          } else {
+            setDone(true);
+            const reward = score * 20 + 50;
+            updateProfile({ ...profile, money: profile.money + reward });
+          }
+        }, 1000);
+      };
+
+      if (questions.length === 0) return null;
+
+      if (done) {
+        return (
+          <div style={{ padding: 20, textAlign: 'center', animation: 'fadeIn 0.3s' }}>
+            <div style={{ fontSize: 64 }}>📚</div>
+            <h3 style={{ ...S.heading, fontSize: 24, marginTop: 16 }}>Quiz Complete!</h3>
+            <p style={{ fontSize: 20, marginTop: 8 }}>{score}/10 correct</p>
+            <p style={{ color: '#ffd700', marginTop: 8 }}>💰 Earned ${score * 20 + 50}</p>
+            <Btn onClick={onBack} style={{ marginTop: 16 }} variant="gold">Done</Btn>
+          </div>
+        );
+      }
+
+      const q = questions[current];
+
+      return (
+        <div style={{ padding: 20, animation: 'fadeIn 0.3s' }}>
+          <Btn variant="secondary" onClick={onBack} style={{ marginBottom: 16 }}>← Back</Btn>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
+            <span style={{ color: '#7986a8' }}>Question {current + 1}/10</span>
+            <span style={{ color: '#4caf50' }}>Score: {score}</span>
+          </div>
+          <div style={{ ...S.card, marginBottom: 16 }}>
+            <h3 style={{ fontSize: 18, marginBottom: 16 }}>{q.q}</h3>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {q.a.map((a, i) => (
+                <button key={i} onClick={() => answer(i)} disabled={answered !== null} style={{
+                  ...S.card, cursor: answered === null ? 'pointer' : 'default', textAlign: 'left',
+                  background: answered === null ? undefined : i === q.correct ? 'rgba(76,175,80,0.3)' : answered === i ? 'rgba(244,67,54,0.3)' : undefined,
+                  border: answered !== null && i === q.correct ? '2px solid #4caf50' : undefined
+                }}>
+                  {a}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    function FoodFunGame({ profile, updateProfile, onBack }) {
+      const [cuisine, setCuisine] = useState(null);
+      const [score, setScore] = useState(0);
+      const [lives, setLives] = useState(3);
+      const [combo, setCombo] = useState(0);
+      const [timeLeft, setTimeLeft] = useState(45);
+      const [items, setItems] = useState([]);
+      const [plateX, setPlateX] = useState(50);
+      const [playing, setPlaying] = useState(false);
+      const [done, setDone] = useState(false);
+      const [effects, setEffects] = useState([]);
+      const [powerup, setPowerup] = useState(null);
+      const [level, setLevel] = useState(1);
+      const gameRef = useRef(null);
+      const keysRef = useRef({ left: false, right: false });
+      const frameRef = useRef(null);
+      const spawnRef = useRef(null);
+      const lastTimeRef = useRef(0);
+      const scoreRef = useRef(0);
+      const livesRef = useRef(3);
+
+      const FOODS = {
+        Asian: { good: ['🍣', '🍜', '🍱', '🍙', '🥟', '🍥', '🥡', '🍘', '🥢', '🍛'], bad: ['🦴', '💀', '🗑️'], special: ['⭐', '💎', '🌟'] },
+        European: { good: ['🍕', '🥐', '🧀', '🥖', '🍝', '🥨', '🫕', '🥩', '🍷', '🧇'], bad: ['🦴', '💀', '🗑️'], special: ['⭐', '💎', '🌟'] },
+        American: { good: ['🍔', '🌭', '🍟', '🥓', '🍗', '🌮', '🥪', '🍩', '🧁', '🥤'], bad: ['🦴', '💀', '🗑️'], special: ['⭐', '💎', '🌟'] }
+      };
+
+      const start = (c) => {
+        setCuisine(c);
+        setScore(0);
+        scoreRef.current = 0;
+        setLives(3);
+        livesRef.current = 3;
+        setCombo(0);
+        setTimeLeft(45);
+        setItems([]);
+        setPlateX(50);
+        setPlaying(true);
+        setDone(false);
+        setEffects([]);
+        setPowerup(null);
+        setLevel(1);
+      };
+
+      useEffect(() => {
+        if (!playing) return;
+        const handleKeyDown = (e) => {
+          if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') keysRef.current.left = true;
+          if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') keysRef.current.right = true;
+        };
+        const handleKeyUp = (e) => {
+          if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') keysRef.current.left = false;
+          if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') keysRef.current.right = false;
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        window.addEventListener('keyup', handleKeyUp);
+        return () => { window.removeEventListener('keydown', handleKeyDown); window.removeEventListener('keyup', handleKeyUp); };
+      }, [playing]);
+
+      const handlePointerMove = (e) => {
+        if (!playing || !gameRef.current) return;
+        const rect = gameRef.current.getBoundingClientRect();
+        const x = ((e.clientX - rect.left) / rect.width) * 100;
+        setPlateX(Math.max(8, Math.min(92, x)));
+      };
+
+      useEffect(() => {
+        if (!playing) return;
+        lastTimeRef.current = performance.now();
+        const gameLoop = (timestamp) => {
+          const delta = timestamp - lastTimeRef.current;
+          lastTimeRef.current = timestamp;
+          const speed = powerup === 'speed' ? 1.2 : 0.6;
+          if (keysRef.current.left) setPlateX(x => Math.max(8, x - speed * (delta / 16)));
+          if (keysRef.current.right) setPlateX(x => Math.min(92, x + speed * (delta / 16)));
+          const fallSpeed = 0.18 + (level * 0.04);
+          setItems(prev => prev.map(item => ({ ...item, y: item.y + fallSpeed * (delta / 16) })).filter(item => item.y < 115));
+          frameRef.current = requestAnimationFrame(gameLoop);
+        };
+        frameRef.current = requestAnimationFrame(gameLoop);
+        return () => cancelAnimationFrame(frameRef.current);
+      }, [playing, level, powerup]);
+
+      useEffect(() => {
+        if (!playing || !cuisine) return;
+        const spawnInterval = Math.max(350, 700 - (level * 50));
+        spawnRef.current = setInterval(() => {
+          const foods = FOODS[cuisine];
+          const rand = Math.random();
+          let emoji, type;
+          if (rand < 0.08) { emoji = foods.special[Math.floor(Math.random() * foods.special.length)]; type = 'special'; }
+          else if (rand < 0.25) { emoji = foods.bad[Math.floor(Math.random() * foods.bad.length)]; type = 'bad'; }
+          else { emoji = foods.good[Math.floor(Math.random() * foods.good.length)]; type = 'good'; }
+          setItems(prev => [...prev, { id: Date.now() + Math.random(), emoji, type, x: 10 + Math.random() * 80, y: -5, size: type === 'special' ? 36 : 28 }]);
+        }, spawnInterval);
+        return () => clearInterval(spawnRef.current);
+      }, [playing, cuisine, level]);
+
+      useEffect(() => {
+        if (!playing) return;
+        const timer = setInterval(() => {
+          setTimeLeft(t => {
+            if (t <= 1) { setPlaying(false); setDone(true); return 0; }
+            if (t === 30 || t === 15) setLevel(l => l + 1);
+            return t - 1;
+          });
+        }, 1000);
+        return () => clearInterval(timer);
+      }, [playing]);
+
+      // Collision detection - runs every frame via items/plateX changes
+      useEffect(() => {
+        if (!playing) return;
+        const plateWidth = powerup === 'wide' ? 18 : 12;
+        
+        setItems(prev => {
+          const remaining = [];
+          for (const item of prev) {
+            const dx = Math.abs(item.x - plateX);
+            // Instant catch when item reaches plate zone
+            if (item.y > 78 && item.y < 95 && dx < plateWidth) {
+              if (item.type === 'good') {
+                const pts = 10 * (1 + Math.floor(combo / 5));
+                scoreRef.current += pts;
+                setScore(scoreRef.current);
+                setCombo(c => c + 1);
+                addEffect(item.x, 82, `+${pts}`, false);
+              } else if (item.type === 'bad') {
+                livesRef.current--;
+                setLives(livesRef.current);
+                setCombo(0);
+                addEffect(item.x, 82, '💔', true);
+                if (livesRef.current <= 0) {
+                  setPlaying(false);
+                  setDone(true);
+                }
+              } else if (item.type === 'special') {
+                const bonus = 50 * level;
+                scoreRef.current += bonus;
+                setScore(scoreRef.current);
+                setCombo(c => c + 3);
+                addEffect(item.x, 82, `+${bonus}⭐`, false);
+                const powers = ['speed', 'wide', 'time'];
+                const pow = powers[Math.floor(Math.random() * powers.length)];
+                setPowerup(pow);
+                setTimeout(() => setPowerup(null), 5000);
+                if (pow === 'time') setTimeLeft(t => t + 5);
+              }
+              // Don't add to remaining - item is caught
+            } else if (item.y > 100 && item.type === 'good') {
+              setCombo(0);
+              remaining.push(item);
+            } else {
+              remaining.push(item);
+            }
+          }
+          return remaining;
+        });
+      }, [items, plateX, playing, combo, level, powerup]);
+
+      const addEffect = (x, y, text, bad) => {
+        const id = Date.now() + Math.random();
+        setEffects(e => [...e, { id, x, y, text, bad }]);
+        setTimeout(() => setEffects(e => e.filter(ef => ef.id !== id)), 800);
+      };
+
+      useEffect(() => {
+        if (done) {
+          const reward = Math.floor(scoreRef.current / 3) + 20;
+          updateProfile({ ...profile, money: profile.money + reward });
+        }
+      }, [done]);
+
+      return (
+        <div style={{ padding: 20, animation: 'fadeIn 0.3s' }}>
+          <Btn variant="secondary" onClick={onBack} style={{ marginBottom: 16 }}>← Back</Btn>
+          <h2 style={{ ...S.heading, fontSize: 22, color: '#ffa726', marginBottom: 16 }}>🍽️ Food Fun</h2>
+          
+          {!cuisine && !done && (
+            <div>
+              <p style={{ color: '#7986a8', marginBottom: 16 }}>Catch falling food with your plate! Avoid the bad stuff!</p>
+              <p style={{ color: '#556', fontSize: 12, marginBottom: 16 }}>🎮 Use Arrow Keys / A-D or drag to move</p>
+              <div style={{ display: 'flex', gap: 12 }}>
+                {['Asian', 'European', 'American'].map(c => (
+                  <div key={c} onClick={() => start(c)} style={{ ...S.card, cursor: 'pointer', textAlign: 'center', flex: 1, transition: 'transform 0.2s' }}
+                    onMouseOver={e => e.currentTarget.style.transform = 'scale(1.05)'}
+                    onMouseOut={e => e.currentTarget.style.transform = 'scale(1)'}>
+                    <div style={{ fontSize: 36 }}>{c === 'Asian' ? '🍣' : c === 'European' ? '🍕' : '🍔'}</div>
+                    <div style={{ fontWeight: 700, marginTop: 8 }}>{c}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {playing && (
+            <div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8, flexWrap: 'wrap', gap: 8 }}>
+                <span style={{ fontWeight: 700, color: '#ffa726' }}>🍽️ {score}</span>
+                <span style={{ color: '#ff2d78' }}>{'❤️'.repeat(lives)}{'🖤'.repeat(3 - lives)}</span>
+                <span style={{ color: '#7b2ff7' }}>🔥 x{combo}</span>
+                <span style={{ color: '#4caf50' }}>Lv.{level}</span>
+                <span style={{ color: timeLeft <= 10 ? '#ff5252' : '#7986a8' }}>⏱️ {timeLeft}s</span>
+              </div>
+              {powerup && (
+                <div style={{ textAlign: 'center', marginBottom: 8, padding: '4px 12px', background: 'rgba(123,47,247,0.2)', borderRadius: 8, display: 'inline-block' }}>
+                  {powerup === 'speed' && '⚡ Speed!'}{powerup === 'wide' && '📏 Wide!'}{powerup === 'time' && '⏰ +5s!'}
+                </div>
+              )}
+              <div ref={gameRef} onPointerMove={handlePointerMove} onTouchMove={(e) => { e.preventDefault(); handlePointerMove(e.touches[0]); }}
+                style={{ position: 'relative', height: 350, background: 'linear-gradient(180deg,#0a1628 0%,#162447 50%,#1f4037 100%)', borderRadius: 16, border: '1px solid rgba(255,255,255,0.1)', overflow: 'hidden', cursor: 'none', touchAction: 'none' }}>
+                <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 60, background: 'linear-gradient(180deg,transparent,rgba(139,90,43,0.3))' }} />
+                <div style={{ position: 'absolute', bottom: 55, left: 0, right: 0, height: 4, background: 'rgba(139,90,43,0.5)' }} />
+                {items.map(item => (
+                  <div key={item.id} style={{ position: 'absolute', left: item.x + '%', top: item.y + '%', fontSize: item.size, transform: 'translateX(-50%)', filter: item.type === 'special' ? 'drop-shadow(0 0 10px gold)' : item.type === 'bad' ? 'drop-shadow(0 0 5px red)' : 'none' }}>
+                    {item.emoji}
+                  </div>
+                ))}
+                <div style={{ position: 'absolute', left: plateX + '%', bottom: 40, transform: 'translateX(-50%)', width: powerup === 'wide' ? 100 : 70, transition: 'width 0.3s' }}>
+                  <div style={{ background: 'linear-gradient(180deg,#f5f5f5 0%,#bdbdbd 100%)', height: 12, borderRadius: '50%', boxShadow: '0 4px 15px rgba(0,0,0,0.4)', border: '2px solid #9e9e9e' }} />
+                  <div style={{ background: 'linear-gradient(180deg,#8d6e63 0%,#5d4037 100%)', height: 20, width: 8, margin: '0 auto', borderRadius: '0 0 4px 4px' }} />
+                </div>
+                {effects.map(e => (
+                  <div key={e.id} style={{ position: 'absolute', left: e.x + '%', top: e.y + '%', transform: 'translateX(-50%)', color: e.bad ? '#ff5252' : '#4caf50', fontWeight: 700, fontSize: e.bad ? 16 : 20, animation: 'slideUp 0.6s', textShadow: '0 0 10px currentColor', pointerEvents: 'none' }}>
+                    {e.text}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {done && (
+            <div style={{ textAlign: 'center' }}>
+              <div style={{ fontSize: 64 }}>{lives > 0 ? '🎉' : '💔'}</div>
+              <h3 style={{ ...S.heading, fontSize: 24, marginTop: 8 }}>{lives > 0 ? 'Great Job!' : 'Game Over!'}</h3>
+              <div style={{ ...S.card, marginTop: 16, display: 'inline-block', padding: '16px 32px' }}>
+                <p style={{ fontSize: 28, fontWeight: 700, color: '#ffa726' }}>🍽️ {scoreRef.current} pts</p>
+              </div>
+              <p style={{ color: '#ffd700', marginTop: 16, fontSize: 18 }}>💰 Earned ${Math.floor(scoreRef.current / 3) + 20}</p>
+              <div style={{ marginTop: 16, display: 'flex', gap: 8, justifyContent: 'center' }}>
+                <Btn onClick={() => { setCuisine(null); setDone(false); }} variant="gold">Play Again</Btn>
+                <Btn onClick={onBack} variant="secondary">Back</Btn>
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    function NameGame({ profile, updateProfile, onBack }) {
+      const [phase, setPhase] = useState('intro'); // intro, playing, done
+      const [players, setPlayers] = useState([]);
+      const [currentTurn, setCurrentTurn] = useState(0);
+      const [eliminated, setEliminated] = useState([]);
+      const [secretAssignments, setSecretAssignments] = useState({});
+      const [message, setMessage] = useState('');
+      const [animatingPlayer, setAnimatingPlayer] = useState(null);
+      const [showingResult, setShowingResult] = useState(null);
+      const [won, setWon] = useState(null);
+
+      const USERNAMES = ['You', 'CoolCat99', 'GameMaster', 'PixelPanda', 'StarPlayer'];
+      const NICKNAMES = ['Blobfish McFlop', 'Sir Quackalot', 'Princess Banana', 'Lord Flapjack', 'Captain Wobble'];
+      const AVATAR_COLORS = ['#00d4ff', '#ff9800', '#4caf50', '#e91e63', '#9c27b0'];
+
+      useEffect(() => {
+        // Initialize game
+        const shuffledNicknames = [...NICKNAMES].sort(() => Math.random() - 0.5);
+        const assignments = {};
+        USERNAMES.forEach((user, i) => {
+          assignments[user] = shuffledNicknames[i];
+        });
+        setSecretAssignments(assignments);
+        setPlayers(USERNAMES);
+        
+        // Random first player
+        const firstPlayer = Math.floor(Math.random() * USERNAMES.length);
+        setCurrentTurn(firstPlayer);
+        setMessage(`${USERNAMES[firstPlayer]} goes first!`);
+        
+        setTimeout(() => {
+          setPhase('playing');
+          setMessage('');
+        }, 1500);
+      }, []);
+
+      const getCurrentPlayer = () => players[currentTurn];
+      const isPlayerTurn = () => getCurrentPlayer() === 'You';
+      const getActivePlayers = () => players.filter(p => !eliminated.includes(p));
+
+      const makeGuess = (guesser, targetPlayer, guessedNickname) => {
+        setAnimatingPlayer(targetPlayer);
+        
+        setTimeout(() => {
+          const actualNickname = secretAssignments[targetPlayer];
+          const isCorrect = actualNickname === guessedNickname;
+          
+          setShowingResult({ 
+            guesser, 
+            target: targetPlayer, 
+            guessedNickname, 
+            actualNickname, 
+            isCorrect 
+          });
+          
+          setTimeout(() => {
+            setShowingResult(null);
+            setAnimatingPlayer(null);
+            
+            if (isCorrect) {
+              // Correct! Target is eliminated, guesser continues
+              const newEliminated = [...eliminated, targetPlayer];
+              setEliminated(newEliminated);
+              
+              const remaining = players.filter(p => !newEliminated.includes(p));
+              
+              if (remaining.length === 1) {
+                // Game over - one player left wins
+                setWon(remaining[0] === 'You');
+                setPhase('done');
+                if (remaining[0] === 'You') {
+                  const reward = 50 + (5 - newEliminated.indexOf('You') - 1) * 20;
+                  updateProfile({ ...profile, money: profile.money + Math.max(50, reward) });
+                }
+              } else {
+                // Guesser continues (find their index in remaining players)
+                const guesserIdx = remaining.indexOf(guesser);
+                if (guesserIdx !== -1) {
+                  setCurrentTurn(players.indexOf(remaining[guesserIdx]));
+                  setMessage(`${guesser} guessed correctly! They go again.`);
+                } else {
+                  // Guesser was eliminated somehow, next player
+                  nextTurn(newEliminated);
+                }
+              }
+            } else {
+              // Wrong! The guessed player goes next
+              const targetIdx = players.indexOf(targetPlayer);
+              setCurrentTurn(targetIdx);
+              setMessage(`Wrong! ${targetPlayer}'s turn now.`);
+            }
+            
+            setTimeout(() => setMessage(''), 2000);
+          }, 2000);
+        }, 500);
+      };
+
+      const nextTurn = (currentEliminated = eliminated) => {
+        const active = players.filter(p => !currentEliminated.includes(p));
+        let nextIdx = (currentTurn + 1) % players.length;
+        while (currentEliminated.includes(players[nextIdx])) {
+          nextIdx = (nextIdx + 1) % players.length;
+        }
+        setCurrentTurn(nextIdx);
+      };
+
+      // Bot AI makes a guess
+      useEffect(() => {
+        if (phase !== 'playing') return;
+        if (isPlayerTurn()) return;
+        if (showingResult || animatingPlayer) return;
+        
+        const active = getActivePlayers();
+        if (active.length <= 1) return;
+        
+        const botTimer = setTimeout(() => {
+          const bot = getCurrentPlayer();
+          // Bot picks a random other active player to guess about
+          const targets = active.filter(p => p !== bot);
+          const target = targets[Math.floor(Math.random() * targets.length)];
+          
+          // Bot has 30% chance of guessing correctly
+          const availableNicknames = NICKNAMES.filter(n => 
+            !eliminated.some(e => secretAssignments[e] === n)
+          );
+          
+          let guessedNickname;
+          if (Math.random() < 0.3) {
+            guessedNickname = secretAssignments[target];
+          } else {
+            const wrongNicknames = availableNicknames.filter(n => n !== secretAssignments[target]);
+            guessedNickname = wrongNicknames[Math.floor(Math.random() * wrongNicknames.length)] || availableNicknames[0];
+          }
+          
+          makeGuess(bot, target, guessedNickname);
+        }, 1500);
+        
+        return () => clearTimeout(botTimer);
+      }, [currentTurn, phase, showingResult, animatingPlayer, eliminated]);
+
+      const [selectedTarget, setSelectedTarget] = useState(null);
+
+      if (phase === 'intro') {
+        return (
+          <div style={{ padding: 20, textAlign: 'center', animation: 'fadeIn 0.3s' }}>
+            <div style={{ fontSize: 64, animation: 'bounce 1s infinite' }}>🎭</div>
+            <h2 style={{ ...S.heading, fontSize: 24, marginTop: 16 }}>Name Game</h2>
+            <p style={{ color: '#7986a8', marginTop: 8 }}>Loading...</p>
+          </div>
+        );
+      }
+
+      if (phase === 'done') {
+        return (
+          <div style={{ padding: 20, textAlign: 'center', animation: 'fadeIn 0.3s' }}>
+            <div style={{ fontSize: 64, animation: won ? 'bounce 0.5s' : 'none' }}>{won ? '🎉' : '😢'}</div>
+            <h3 style={{ ...S.heading, fontSize: 24, marginTop: 16 }}>{won ? 'You Won!' : 'You were eliminated!'}</h3>
+            {won && <p style={{ color: '#ffd700', marginTop: 8 }}>💰 Earned $50+</p>}
+            <Btn onClick={onBack} style={{ marginTop: 16 }} variant="gold">Done</Btn>
+          </div>
+        );
+      }
+
+      const activePlayers = getActivePlayers();
+      const currentPlayer = getCurrentPlayer();
+
+      return (
+        <div style={{ padding: 20, animation: 'fadeIn 0.3s' }}>
+          <style>{`
+            @keyframes playerPulse {
+              0%, 100% { transform: scale(1); box-shadow: 0 0 0 rgba(0,212,255,0); }
+              50% { transform: scale(1.05); box-shadow: 0 0 20px rgba(0,212,255,0.5); }
+            }
+            @keyframes eliminateAnim {
+              0% { transform: scale(1); opacity: 1; }
+              50% { transform: scale(1.2) rotate(10deg); }
+              100% { transform: scale(0) rotate(-20deg); opacity: 0; }
+            }
+            @keyframes correctGuess {
+              0% { background: rgba(76,175,80,0); }
+              50% { background: rgba(76,175,80,0.3); }
+              100% { background: rgba(76,175,80,0); }
+            }
+            @keyframes wrongGuess {
+              0% { background: rgba(244,67,54,0); }
+              50% { background: rgba(244,67,54,0.3); }
+              100% { background: rgba(244,67,54,0); }
+            }
+            @keyframes slideInRight {
+              from { transform: translateX(100px); opacity: 0; }
+              to { transform: translateX(0); opacity: 1; }
+            }
+          `}</style>
+          
+          <Btn variant="secondary" onClick={onBack} style={{ marginBottom: 16 }}>← Back</Btn>
+          <h2 style={{ ...S.heading, fontSize: 22, marginBottom: 8 }}>🎭 Name Game</h2>
+          
+          {/* Current turn indicator */}
+          <div style={{ 
+            ...S.card, 
+            marginBottom: 16, 
+            padding: '12px 16px',
+            background: isPlayerTurn() ? 'linear-gradient(135deg, rgba(0,212,255,0.2) 0%, rgba(123,47,247,0.1) 100%)' : 'rgba(255,255,255,0.05)',
+            border: isPlayerTurn() ? '2px solid #00d4ff' : '1px solid rgba(255,255,255,0.1)',
+            animation: isPlayerTurn() ? 'playerPulse 2s infinite' : 'none'
+          }}>
+            <div style={{ fontWeight: 700, color: isPlayerTurn() ? '#00d4ff' : '#7986a8' }}>
+              {isPlayerTurn() ? "🎯 Your Turn!" : `${currentPlayer}'s turn...`}
+            </div>
+            {message && <div style={{ marginTop: 8, color: '#ffd700', fontSize: 13 }}>{message}</div>}
+          </div>
+
+          {/* Result popup */}
+          {showingResult && (
+            <div style={{
+              ...S.card,
+              marginBottom: 16,
+              padding: 16,
+              textAlign: 'center',
+              animation: showingResult.isCorrect ? 'correctGuess 0.5s' : 'wrongGuess 0.5s',
+              border: showingResult.isCorrect ? '2px solid #4caf50' : '2px solid #f44336'
+            }}>
+              <div style={{ fontSize: 32 }}>{showingResult.isCorrect ? '✅' : '❌'}</div>
+              <p style={{ fontWeight: 700, marginTop: 8 }}>
+                {showingResult.guesser} guessed {showingResult.target} is "{showingResult.guessedNickname}"
+              </p>
+              <p style={{ color: showingResult.isCorrect ? '#4caf50' : '#f44336', marginTop: 4 }}>
+                {showingResult.isCorrect ? 'Correct!' : `Wrong! They're "${showingResult.actualNickname}"`}
+              </p>
+            </div>
+          )}
+
+          {/* Players */}
+          <div style={{ marginBottom: 16 }}>
+            <p style={{ color: '#7986a8', fontSize: 12, marginBottom: 8 }}>Players ({activePlayers.length} remaining):</p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {players.map((player, idx) => {
+                const isElim = eliminated.includes(player);
+                const isActive = currentTurn === idx && !isElim;
+                const isAnimating = animatingPlayer === player;
+                
+                return (
+                  <div 
+                    key={player}
+                    style={{
+                      ...S.card,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 12,
+                      opacity: isElim ? 0.3 : 1,
+                      transform: isElim ? 'scale(0.95)' : 'scale(1)',
+                      transition: 'all 0.3s',
+                      border: isActive ? '2px solid #00d4ff' : isAnimating ? '2px solid #ffd700' : '1px solid rgba(255,255,255,0.1)',
+                      animation: isAnimating ? 'playerPulse 0.5s infinite' : isElim ? 'none' : 'slideInRight 0.3s'
+                    }}
+                  >
+                    <div style={{
+                      width: 45,
+                      height: 45,
+                      borderRadius: '50%',
+                      background: `linear-gradient(135deg, ${AVATAR_COLORS[idx]} 0%, ${AVATAR_COLORS[(idx + 1) % 5]} 100%)`,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontWeight: 700,
+                      fontSize: 18
+                    }}>
+                      {player[0]}
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontWeight: 700 }}>{player}</div>
+                      {player === 'You' && (
+                        <div style={{ fontSize: 11, color: '#7b2ff7' }}>Secret: {secretAssignments['You']}</div>
+                      )}
+                      {isElim && <div style={{ fontSize: 11, color: '#f44336' }}>Eliminated</div>}
+                    </div>
+                    {isActive && <div style={{ color: '#00d4ff', fontSize: 20 }}>👈</div>}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Your turn - select target then nickname */}
+          {isPlayerTurn() && !showingResult && !animatingPlayer && (
+            <div style={{ ...S.card, padding: 16 }}>
+              {!selectedTarget ? (
+                <>
+                  <p style={{ fontWeight: 700, marginBottom: 12 }}>Who do you want to guess about?</p>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                    {activePlayers.filter(p => p !== 'You').map(player => (
+                      <Btn 
+                        key={player} 
+                        variant="secondary" 
+                        onClick={() => setSelectedTarget(player)}
+                        style={{ flex: '1 1 45%' }}
+                      >
+                        {player}
+                      </Btn>
+                    ))}
+                  </div>
+                </>
+              ) : (
+                <>
+                  <p style={{ fontWeight: 700, marginBottom: 8 }}>What's {selectedTarget}'s nickname?</p>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                    {NICKNAMES.filter(n => !eliminated.some(e => secretAssignments[e] === n)).map(nickname => (
+                      <Btn 
+                        key={nickname} 
+                        variant="secondary"
+                        onClick={() => {
+                          makeGuess('You', selectedTarget, nickname);
+                          setSelectedTarget(null);
+                        }}
+                        style={{ flex: '1 1 45%', fontSize: 12 }}
+                      >
+                        {nickname}
+                      </Btn>
+                    ))}
+                  </div>
+                  <Btn variant="secondary" onClick={() => setSelectedTarget(null)} style={{ marginTop: 12, width: '100%' }}>
+                    ← Pick different player
+                  </Btn>
+                </>
+              )}
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    function MoneyMaking({ profile, updateProfile, onBack }) {
+      const [earnings, setEarnings] = useState(0);
+      const [multiplier, setMultiplier] = useState(1);
+      const [question, setQuestion] = useState(null);
+      const [answered, setAnswered] = useState(null);
+
+      useEffect(() => {
+        const towerChars = profile.tower.flat().length;
+        if (towerChars === 0) return;
+        const interval = setInterval(() => {
+          setEarnings(e => Math.min(1000, e + towerChars));
+        }, 1000);
+        return () => clearInterval(interval);
+      }, [profile.tower]);
+
+      const askQuestion = () => {
+        const q = QUIZ_QUESTIONS[Math.floor(Math.random() * QUIZ_QUESTIONS.length)];
+        setQuestion(q);
+        setAnswered(null);
+      };
+
+      const answer = (idx) => {
+        if (answered !== null) return;
+        setAnswered(idx);
+        if (idx === question.correct) {
+          setMultiplier(m => Math.min(5, m + 0.5));
+        }
+        setTimeout(() => setQuestion(null), 1500);
+      };
+
+      const collect = () => {
+        const total = Math.floor(earnings * multiplier);
+        updateProfile({ ...profile, money: profile.money + total });
+        setEarnings(0);
+        setMultiplier(1);
+      };
+
+      return (
+        <div style={{ padding: 20, animation: 'fadeIn 0.3s' }}>
+          <Btn variant="secondary" onClick={onBack} style={{ marginBottom: 16 }}>← Back</Btn>
+          <h2 style={{ ...S.heading, fontSize: 22, marginBottom: 16 }}>💰 Money Making</h2>
+          <div style={{ ...S.card, textAlign: 'center', marginBottom: 16 }}>
+            <p style={{ color: '#7986a8', marginBottom: 8 }}>Tower pets are earning...</p>
+            <p style={{ fontSize: 36, color: '#ffd700', fontWeight: 700 }}>${earnings}</p>
+            <p style={{ color: '#4caf50' }}>x{multiplier.toFixed(1)} multiplier</p>
+            <p style={{ color: '#556', fontSize: 12 }}>{profile.tower.flat().length} pets working (max $1000)</p>
+          </div>
+          {!question ? (
+            <div style={{ display: 'flex', gap: 8 }}>
+              <Btn onClick={askQuestion} variant="secondary">Answer Question (+0.5x)</Btn>
+              <Btn onClick={collect} disabled={earnings === 0} variant="gold">Collect ${Math.floor(earnings * multiplier)}</Btn>
+            </div>
+          ) : (
+            <div style={{ ...S.card }}>
+              <h3 style={{ fontSize: 16, marginBottom: 12 }}>{question.q}</h3>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {question.a.map((a, i) => (
+                  <button key={i} onClick={() => answer(i)} disabled={answered !== null}
+                    style={{ ...S.card, cursor: answered === null ? 'pointer' : 'default', textAlign: 'left', background: answered === null ? undefined : i === question.correct ? 'rgba(76,175,80,0.3)' : answered === i ? 'rgba(244,67,54,0.3)' : undefined }}>
+                    {a}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    // ==================== TOURNAMENT HUB ====================
+    function TournamentHub({ profile, updateProfile, onBack }) {
+      const [selectedGame, setSelectedGame] = useState(null);
+      const [gameInfo, setGameInfo] = useState(null);
+
+      const games = [
+        { id: 'defeated', name: 'Defeated!', icon: '⚔️', desc: 'Turn-based combat' },
+        { id: 'climb', name: 'Climb', icon: '🧗', desc: 'Platformer challenge' },
+        { id: 'study', name: 'Study', icon: '📚', desc: 'Quiz game' },
+        { id: 'foodfun', name: 'Food Fun', icon: '🍽️', desc: 'Catch falling food' },
+        { id: 'namegame', name: 'Name Game', icon: '🎭', desc: 'Guess the name' },
+        { id: 'money', name: 'Money Making', icon: '💰', desc: 'Passive earnings' }
+      ];
+
+      const startGame = (info) => {
+        setGameInfo(info);
+      };
+
+      if (gameInfo) {
+        if (selectedGame === 'defeated') return <DefeatedGame profile={profile} updateProfile={updateProfile} onBack={() => { setGameInfo(null); setSelectedGame(null); }} gameInfo={gameInfo} />;
+        if (selectedGame === 'climb') return <ClimbGame profile={profile} updateProfile={updateProfile} onBack={() => { setGameInfo(null); setSelectedGame(null); }} />;
+        if (selectedGame === 'study') return <StudyGame profile={profile} updateProfile={updateProfile} onBack={() => { setGameInfo(null); setSelectedGame(null); }} />;
+        if (selectedGame === 'foodfun') return <FoodFunGame profile={profile} updateProfile={updateProfile} onBack={() => { setGameInfo(null); setSelectedGame(null); }} />;
+        if (selectedGame === 'namegame') return <NameGame profile={profile} updateProfile={updateProfile} onBack={() => { setGameInfo(null); setSelectedGame(null); }} />;
+        if (selectedGame === 'money') return <MoneyMaking profile={profile} updateProfile={updateProfile} onBack={() => { setGameInfo(null); setSelectedGame(null); }} />;
+      }
+
+      if (selectedGame) {
+        return <MultiplayerLobby gameType={selectedGame} profile={profile} onStart={startGame} onBack={() => setSelectedGame(null)} />;
+      }
+
+      return (
+        <div style={{ padding: 20, paddingBottom: 100, animation: 'fadeIn 0.3s' }}>
+          <h2 style={{ ...S.heading, fontSize: 24, marginBottom: 16 }}>🏆 Games</h2>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 12 }}>
+            {games.map(game => (
+              <div key={game.id} onClick={() => setSelectedGame(game.id)} style={{ ...S.card, cursor: 'pointer', textAlign: 'center', transition: 'transform 0.2s' }}
+                onMouseOver={e => e.currentTarget.style.transform = 'translateY(-4px)'}
+                onMouseOut={e => e.currentTarget.style.transform = 'translateY(0)'}>
+                <div style={{ fontSize: 36 }}>{game.icon}</div>
+                <div style={{ fontWeight: 700, marginTop: 8 }}>{game.name}</div>
+                <div style={{ color: '#7986a8', fontSize: 11 }}>{game.desc}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    // ==================== MAIN APP ====================
+    function Gainlet() {
+      const [profile, setProfile] = useState(null);
+      const [screen, setScreen] = useState('hub');
+      const [tradeTarget, setTradeTarget] = useState(null);
+
+      const updateProfile = async (newProfile) => {
+        setProfile(newProfile);
+        await saveProfile(newProfile);
+      };
+
+      if (!profile) {
+        return <LoginScreen onLogin={setProfile} />;
+      }
+
+      if (screen === 'trade' && tradeTarget) {
+        return <TradeScreen profile={profile} updateProfile={updateProfile} target={tradeTarget} onBack={() => { setTradeTarget(null); setScreen('friends'); }} />;
+      }
+
+      return (
+        <div style={{ maxWidth: 800, margin: '0 auto', paddingBottom: 80 }}>
+          {screen === 'hub' && <HubScreen profile={profile} setScreen={setScreen} />}
+          {screen === 'collection' && <CollectionScreen profile={profile} updateProfile={updateProfile} />}
+          {screen === 'open' && <OpenScreen profile={profile} updateProfile={updateProfile} />}
+          {screen === 'tower' && <TowerScreen profile={profile} updateProfile={updateProfile} />}
+          {screen === 'tournament' && <TournamentHub profile={profile} updateProfile={updateProfile} />}
+          {screen === 'shop' && <ShopScreen profile={profile} updateProfile={updateProfile} />}
+          {screen === 'friends' && <FriendsScreen profile={profile} updateProfile={updateProfile} setScreen={setScreen} setTradeTarget={setTradeTarget} />}
+          <NavBar screen={screen} setScreen={setScreen} profile={profile} />
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<Gainlet />);
+  </script>
+</body>
+</html>
